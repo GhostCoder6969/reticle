@@ -25,7 +25,7 @@ The rows are kept as a record of what was run. They are not a baseline. **Record
 
 So they were all run. **Every script below passes.** The two defects that surfaced are fixed:
 
-- `suite-rre.mjs` recorded flows that asserted nothing and then demanded a `pass` verdict, which `reticle_flow_verify` correctly refuses — so **`pnpm bench` exited 1** and `replay-determinism` never ran at all. Each flow now carries a success oracle.
+- `suite-rre.mjs` recorded flows that asserted nothing and then demanded a `pass` verdict, which `reticle_verify { action: "flows" }` correctly refuses — so **`pnpm bench` exited 1** and `replay-determinism` never ran at all. Each flow now carries a success oracle.
 - `clock-timetravel.mjs` failed on `reticle_clock {reset:true}` with `TypeError: Illegal invocation`. That one was **not a bench bug** — see "A product bug this directory caught" below.
 
 **The prerequisite column is the point.** Every script that looked broken during this sweep was actually a script whose fixture nobody had started, and that is why "which of these works" was unanswerable.
