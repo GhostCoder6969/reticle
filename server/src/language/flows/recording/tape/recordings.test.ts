@@ -24,6 +24,30 @@ describe('RecordingStore', () => {
     expect(store.stop('flow')).toBeUndefined();
   });
 
+  it('keeps the page each step ran on in a deliberate recording, not only on the ambient tape', () => {
+    const store = new RecordingStore();
+    store.start('flow', 0);
+    store.capture(step('reticle_act'), '/overview');
+    store.capture(step('reticle_act'));
+    expect(store.stop('flow')?.steps.map((s) => s.route)).toEqual(['/overview', undefined]);
+  });
+
+  it('takes a refuted expectation off the ambient tape, and leaves a deliberate recording alone', () => {
+    const store = new RecordingStore();
+    store.start('mine', 0);
+    const refuted = {
+      ...step('reticle_act'),
+      expect: { kind: 'route', pathname: '/nowhere' },
+    } as RecordedStep;
+    store.capture(refuted);
+    store.unassertLast();
+    expect(store.stop(AMBIENT_RECORDING)?.steps.at(-1)?.expect).toBeUndefined();
+    expect(store.stop('mine')?.steps.at(-1)?.expect).toEqual({
+      kind: 'route',
+      pathname: '/nowhere',
+    });
+  });
+
   it('capture with no NAMED recording still records — the ambient tape opens itself', () => {
     /*
      * Inverted deliberately. This used to assert that a step driven with no recording open was a

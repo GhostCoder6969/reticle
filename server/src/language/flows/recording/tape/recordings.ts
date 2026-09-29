@@ -164,11 +164,29 @@ export class RecordingStore {
       // it is a different one that starts in a state nothing established. A recording somebody
       // opened on purpose is not capped — they said when it starts and they say when it stops.
       if (AMBIENT_RECORDING === name && rec.steps.length >= AMBIENT_STEP_CAP) continue;
-      // The route rides on the AMBIENT tape only: a recording somebody opened deliberately is
-      // already one journey by construction, and stamping a route on its steps would change what a
-      // deliberate recording contains.
-      rec.steps.push(AMBIENT_RECORDING === name && route !== undefined ? { ...step, route } : step);
+      // Every recording keeps the page each step ran on: the ambient tape to be cut into journeys,
+      // and a deliberate one because the saved flow carries it (`FlowStep.route`), which is the only
+      // way anything reading the flow later knows where a step happened.
+      rec.steps.push(route === undefined ? step : { ...step, route });
     }
+  }
+
+  /**
+   * Take the expectation off the ambient tape's last step, because the verdict on it came back no.
+   *
+   * A step is captured at dispatch, before anything is judged, so a claim that turned out false is
+   * already on the tape as that step's `expect`. Cut into a journey it becomes a flow that is red for
+   * ever, on an expectation nobody but the agent's wrong guess made. The failure is not lost: it is
+   * filed as a capsule, the artifact built for "this should hold and does not". The ACTION stays,
+   * since the steps after it ran on the page it produced. A recording somebody opened deliberately
+   * is left as they drove it.
+   */
+  unassertLast(): void {
+    const tape = this.#active.get(AMBIENT_RECORDING);
+    const last = tape?.steps.at(-1);
+    if (tape === undefined || last === undefined || last.expect === undefined) return;
+    const { expect: _dropped, ...kept } = last;
+    tape.steps[tape.steps.length - 1] = kept;
   }
 
   /**
