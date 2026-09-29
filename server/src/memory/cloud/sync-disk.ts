@@ -79,6 +79,8 @@ const DERIVED_FILE = {
   impact: ReticleDir.IMPACT_FILE,
   flake: ReticleDir.FLAKE_FILE,
   intent: ReticleDir.INTENT_FILE,
+  envelopes: ReticleDir.ENVELOPES_FILE,
+  'assertion-tiers': ReticleDir.TIERS_FILE,
 } as const;
 
 /** The directory the sharded intent store writes into, beside the legacy flat file. */

@@ -44,4 +44,19 @@ describe('saving an invocation step', () => {
     expect(act.invoke).toBeUndefined();
     expect(act.tool).toBe(FlowStepTool.ACT);
   });
+
+  /**
+   * The page a step ran on reaches the saved flow. The recorder knew it all along and kept it for
+   * cutting tapes into journeys; a server mapping an app out of flows had to guess it instead.
+   */
+  it('keeps the page the step ran on, and the published schema keeps it too', () => {
+    const act = recordedStepToFlowStep({
+      tool: FlowStepTool.ACT,
+      args: { action: 'click', by: 'testid', value: 'pay' },
+      stable: true,
+      route: '/cart',
+    });
+    expect(act.route).toBe('/cart');
+    expect(FlowStepSchema.parse(act).route).toBe('/cart');
+  });
 });

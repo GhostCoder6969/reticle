@@ -48,6 +48,10 @@ const DERIVED_RECORDS = [
   { kind: 'impact', file: ReticleDir.IMPACT_FILE },
   { kind: 'flake', file: ReticleDir.FLAKE_FILE },
   { kind: 'intent', file: ReticleDir.INTENT_FILE },
+  // How each page normally behaves, and how strong each flow's checks are. Kept only here, they
+  // cannot tell a server a page that drifted from one that always behaved that way.
+  { kind: 'envelopes', file: ReticleDir.ENVELOPES_FILE },
+  { kind: 'assertion-tiers', file: ReticleDir.TIERS_FILE },
 ] as const;
 
 type DerivedKind = (typeof DERIVED_RECORDS)[number]['kind'];

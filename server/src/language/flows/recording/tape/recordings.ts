@@ -11,9 +11,10 @@ export interface RecordedStep {
   /** Optional post-condition annotation carried into the on-disk flow's expect. */
   expect?: Predicate;
   /**
-   * The route this step ran on. RECORDER-INTERNAL: it never reaches the on-disk flow.
+   * The route this step ran on. Carried into the saved flow as `FlowStep.route`, so anything
+   * reading the flow later knows which page each step was on.
    *
-   * It exists so an ambient tape — which records a whole session rather than a journey somebody
+   * It first existed so an ambient tape — which records a whole session rather than a journey somebody
    * chose — can be cut into journeys at session end. Without it the tape is one flow that starts at
    * the login screen and ends wherever the agent stopped, and replaying a suite of those fails on
    * the second one: the app is already authenticated, so the login steps no longer apply. See

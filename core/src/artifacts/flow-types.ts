@@ -187,6 +187,14 @@ export interface FlowStep {
    * repair would still have to happen in every copy, and the sub-journey could not be reused.
    */
   invoke?: string;
+  /**
+   * The page (pathname) this step ran on, as the recorder saw it.
+   *
+   * Optional and descriptive: replay never navigates by it. It is what lets anything reading a flow
+   * later (a dashboard mapping an app out of its flows, a teammate reading one) say which page each
+   * step happened on, instead of guessing from the few steps that asserted a route.
+   */
+  route?: string;
 }
 
 const baseFlowStep = z.object({
@@ -226,6 +234,7 @@ const baseFlowStep = z.object({
   degraded: z.boolean().optional(),
   timeoutMs: z.number().int().positive().optional(),
   invoke: z.string().min(1).optional(),
+  route: z.string().min(1).max(2048).optional(),
 });
 
 export const FlowStepSchema: z.ZodType<FlowStep> = baseFlowStep.extend({

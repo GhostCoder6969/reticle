@@ -204,7 +204,17 @@ function buildStep(
  * A ref-only (stable:false) step is recorded with a best-effort anchor and degraded:true —
  * NEVER silently dropped. ACT_SEQUENCE recurses over its sub-steps.
  */
+/**
+ * One recorded step as a saved one, with the page it ran on. The page is added here, once, so no
+ * branch below can forget it.
+ */
 export function recordedStepToFlowStep(step: RecordedStep): FlowStep {
+  const out = stepOf(step);
+  if (step.route !== undefined && '' !== step.route) out.route = step.route;
+  return out;
+}
+
+function stepOf(step: RecordedStep): FlowStep {
   if (step.invoke !== undefined) {
     // An invocation drives nothing: no action, no args, and an anchor only because every step
     // carries one. Falling through to the action path below would give it an `action` and a

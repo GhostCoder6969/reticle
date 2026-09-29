@@ -383,6 +383,45 @@ describe('a refused artifact is a failed push, not a quiet one', () => {
   });
 });
 
+/**
+ * How each page normally behaves (envelopes) and how strong each flow's checks are (assertion tiers)
+ * were kept only on the machine that measured them. They are what a server needs to tell a page that
+ * drifted from one that always behaved that way, so they ride along like the other derived records.
+ */
+describe('the page baselines and check strengths leave the laptop', () => {
+  const ENVELOPES = {
+    version: 1,
+    routes: { '/issues': { route: '/issues', samples: 3, stats: {} } },
+  };
+  const TIERS = { version: 1, flows: { 'sign-in': { steps: [{ step: 0 }], sources: [] } } };
+  const withKnowledge = source({
+    derived: (kind) =>
+      'envelopes' === kind ? ENVELOPES : 'assertion-tiers' === kind ? TIERS : undefined,
+  });
+
+  it('sends envelopes and assertion tiers the server does not hold', async () => {
+    const { calls } = await cycle({}, withKnowledge);
+    const push = calls.find((c) => 'POST' === c.method);
+    expect(push?.body).toMatchObject({ envelopes: ENVELOPES, 'assertion-tiers': TIERS });
+  });
+
+  it('sends neither when the server already holds the same content', async () => {
+    const { calls } = await cycle(
+      {
+        status: {
+          knownRunIds: [],
+          stateHashes: {
+            envelopes: hashPayload(ENVELOPES),
+            'assertion-tiers': hashPayload(TIERS),
+          },
+        },
+      },
+      withKnowledge,
+    );
+    expect(calls.some((c) => 'POST' === c.method)).toBe(false);
+  });
+});
+
 describe('it sends only the difference', () => {
   it('skips runs the server names and sends the rest', async () => {
     const { report, calls } = await cycle(
