@@ -31,6 +31,18 @@ describe('buildServerInstructions', () => {
       expect(text).toContain(ReticleTool.SESSION);
     });
 
+    /*
+     * `init` starts the dev server and opens the app itself. This line used to say "run init, then
+     * RESTART the dev server, then load the app in a browser" to every agent, which contradicted
+     * skills/install-and-verify and sent agents to kill the server init had just started. The
+     * restart only applies to a dev server that was already running before init edited its config.
+     */
+    it('does not tell every agent to restart the dev server init just started', () => {
+      expect(text).toContain('starts the dev server and opens the app itself');
+      expect(text).toMatch(/only if a dev server was ALREADY running/);
+      expect(text).not.toMatch(/then RESTART the dev server/);
+    });
+
     it('still carries the verdict discipline and the feedback ask', () => {
       expect(text).toContain(ReticleTool.ACT_AND_WAIT);
       // Feedback is an action on the session tool wherever the family is merged.

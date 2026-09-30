@@ -88,15 +88,17 @@ const replayFirst = (v: SurfaceVocabulary): string => {
  *
  * Deliberately concrete: the command, what it does to the app, and the call that confirms it. A
  * general instruction to "set Reticle up" is the state these agents are already in — they have the
- * tools and no app, and nothing tells them that combination is incomplete. It also names the dev
- * server restart, because a plugin added to a config the running server already read is the single
- * most common way this step half-succeeds.
+ * tools and no app, and nothing tells them that combination is incomplete. `init` starts the dev
+ * server and opens the app itself, so the restart is named only for the case it cannot cover: a dev
+ * server that was already running read the config before `init` edited it, which is the single most
+ * common way this step half-succeeds. Telling every agent to restart sent them to kill the server
+ * `init` had just started.
  */
 const firstMoveFor = (
   v: SurfaceVocabulary,
 ): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
 
-Fix that before anything else: run \`npx @reticlehq/server init\` in the project, then RESTART the dev server (a plugin added to a config the running server already read is not in the bundle), then load the app in a browser. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
+Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.`;
 
 /**
  * When to reach for the tools that are advertised but never explained, and how to reach the two
