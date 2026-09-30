@@ -24,14 +24,6 @@ describe('RecordingStore', () => {
     expect(store.stop('flow')).toBeUndefined();
   });
 
-  it('keeps the page each step ran on in a deliberate recording, not only on the ambient tape', () => {
-    const store = new RecordingStore();
-    store.start('flow', 0);
-    store.capture(step('reticle_act'), '/overview');
-    store.capture(step('reticle_act'));
-    expect(store.stop('flow')?.steps.map((s) => s.route)).toEqual(['/overview', undefined]);
-  });
-
   it('takes a refuted expectation off the ambient tape, and leaves a deliberate recording alone', () => {
     const store = new RecordingStore();
     store.start('mine', 0);

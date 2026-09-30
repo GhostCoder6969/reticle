@@ -439,6 +439,14 @@ describe('runInit', () => {
     expect(noPkg.lines.join('\n')).toContain(FEEDBACK_HINT);
   });
 
+  // When the runtime follows (dev server, browser, connect), asking here put the request for
+  // feedback in the middle of the output, before anything had happened. The runtime asks last.
+  it('leaves the ask to the runtime when one follows', () => {
+    const io = memoryIo(VITE_FILES);
+    runInit({ ...OPTS, continuesToRuntime: true }, io);
+    expect(io.lines.join('\n')).not.toContain(FEEDBACK_HINT);
+  });
+
   it('runs the install when enabled, pinned to the CLI version', () => {
     const io = memoryIo({ ...VITE_FILES, 'pnpm-lock.yaml': '' }, { mcpExists: true });
     runInit({ ...OPTS, install: true }, io);
@@ -586,6 +594,18 @@ describe('runInit — workspace roots', () => {
     const r = runInit({ ...OPTS, app: 'apps/nope' }, io);
     expect(r.ok).toBe(false);
     expect(io.lines.join('\n')).toContain('--app apps/nope');
+  });
+
+  it('names the ecosystem when --app points at a non-JS project', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({ name: 'mono', private: true }),
+      'apps/mobile/pubspec.yaml': 'name: mobile\n',
+    });
+    const r = runInit({ ...OPTS, app: 'apps/mobile' }, io);
+    expect(r.ok).toBe(false);
+    const out = io.lines.join('\n');
+    expect(out).toContain('This is a Flutter project.');
+    expect(out).not.toContain('does not name a directory with a package.json');
   });
 
   it('asks for feedback exactly once, even though the redirect re-enters init', () => {

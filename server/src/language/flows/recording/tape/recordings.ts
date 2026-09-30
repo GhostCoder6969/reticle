@@ -1,4 +1,4 @@
-import { FlowStepTool, type Predicate } from '@reticlehq/core';
+import { FlowStepTool, type FlowFile, type Predicate } from '@reticlehq/core';
 
 /** One captured agent action, normalized for replay. */
 export interface RecordedStep {
@@ -11,10 +11,9 @@ export interface RecordedStep {
   /** Optional post-condition annotation carried into the on-disk flow's expect. */
   expect?: Predicate;
   /**
-   * The route this step ran on. Carried into the saved flow as `FlowStep.route`, so anything
-   * reading the flow later knows which page each step was on.
+   * The route this step ran on. RECORDER-INTERNAL: it never reaches the on-disk flow.
    *
-   * It first existed so an ambient tape — which records a whole session rather than a journey somebody
+   * It exists so an ambient tape — which records a whole session rather than a journey somebody
    * chose — can be cut into journeys at session end. Without it the tape is one flow that starts at
    * the login screen and ends wherever the agent stopped, and replaying a suite of those fails on
    * the second one: the app is already authenticated, so the login steps no longer apply. See
@@ -29,6 +28,12 @@ export interface RecordedStep {
    * `invoke` first and treats the step as a call.
    */
   invoke?: string;
+  /** The page this step ran on. Written to the saved step (unlike `route`, which cuts journeys). */
+  page?: string;
+  /** The page it ended on once it settled — see `markEnded`. */
+  endPage?: string;
+  /** Why the agent took this step: the `intent` it declared on the action. Names the saved flow. */
+  intent?: string;
 }
 
 interface ActiveRecording {
@@ -73,6 +78,8 @@ export interface CompiledProgram {
    * format change.
    */
   routes?: string[];
+  /** Who made it — see FlowFile.author. Stamped by the caller that knows. */
+  author?: FlowFile['author'];
 }
 
 /**
@@ -164,10 +171,15 @@ export class RecordingStore {
       // it is a different one that starts in a state nothing established. A recording somebody
       // opened on purpose is not capped — they said when it starts and they say when it stops.
       if (AMBIENT_RECORDING === name && rec.steps.length >= AMBIENT_STEP_CAP) continue;
-      // Every recording keeps the page each step ran on: the ambient tape to be cut into journeys,
-      // and a deliberate one because the saved flow carries it (`FlowStep.route`), which is the only
-      // way anything reading the flow later knows where a step happened.
-      rec.steps.push(route === undefined ? step : { ...step, route });
+      // A step nobody marked ended where the next one began.
+      const previous = rec.steps.at(-1);
+      if (previous !== undefined && previous.endPage === undefined && step.page !== undefined) {
+        previous.endPage = step.page;
+      }
+      // The route rides on the AMBIENT tape only: a recording somebody opened deliberately is
+      // already one journey by construction, and stamping a route on its steps would change what a
+      // deliberate recording contains.
+      rec.steps.push(AMBIENT_RECORDING === name && route !== undefined ? { ...step, route } : step);
     }
   }
 
@@ -187,6 +199,20 @@ export class RecordingStore {
     if (tape === undefined || last === undefined || last.expect === undefined) return;
     const { expect: _dropped, ...kept } = last;
     tape.steps[tape.steps.length - 1] = kept;
+  }
+
+  /**
+   * The page the step just captured ended on, once its action settled.
+   *
+   * Fills only a step that has none, so calling it after an action that captured nothing leaves the
+   * previous step's own answer alone.
+   */
+  markEnded(page: string | undefined): void {
+    if (page === undefined) return;
+    for (const rec of this.#active.values()) {
+      const last = rec.steps.at(-1);
+      if (last !== undefined && last.endPage === undefined) last.endPage = page;
+    }
   }
 
   /**

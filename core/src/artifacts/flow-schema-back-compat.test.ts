@@ -74,15 +74,4 @@ describe('a flow recorded before these fields existed still loads', () => {
     const bad = { ...LEGACY, steps: [{ ...LEGACY.steps[0], effect: 'destructive' }] };
     expect(FlowFileSchema.safeParse(bad).success).toBe(false);
   });
-
-  /**
-   * The page a step ran on. The recorder always knew it and kept it to itself, so a server reading a
-   * flow could only guess which page each step was on from the few steps that asserted a route.
-   */
-  it('keeps the page each step ran on, and still reads steps that do not say', () => {
-    const withPage = { ...LEGACY, steps: [{ ...LEGACY.steps[0], route: '/cart' }] };
-    const parsed = FlowFileSchema.parse(withPage);
-    expect(parsed.steps[0]?.route).toBe('/cart');
-    expect(FlowFileSchema.parse(LEGACY).steps[0]?.route).toBeUndefined();
-  });
 });
