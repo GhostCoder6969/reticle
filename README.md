@@ -34,16 +34,15 @@ It drives your real running app, reads what actually happened, and hands back **
 
 ## Install
 
-Two commands. Needs Node 20.11+.
+One command. Needs Node 20.11+ (no Node? `brew install node` or [nodejs.org](https://nodejs.org)).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh   # once per machine
-reticle init                                                                                # in your app's folder
+curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
 ```
 
 Windows: `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`
 
-Then open your coding agent and ask: _"Verify one flow in my app with Reticle."_
+It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Set up Reticle and verify one flow."_
 
 <a id="manual-install"></a>
 <details>
@@ -59,7 +58,7 @@ Then open your coding agent and ask: _"Verify one flow in my app with Reticle."_
 
 **Any MCP client, by hand:** `{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }`
 
-Whichever you choose, run `reticle init` in your app's folder afterwards. Want a cloud dashboard? Use `reticle connect --project "My App"` instead of `init`. Not sure it worked? `reticle doctor`.
+Wire your app yourself instead of letting your agent do it: `reticle init` in the app's folder. Want a cloud dashboard? `reticle connect --project "My App"`. Not sure it worked? `reticle doctor`.
 
 </details>
 
