@@ -396,6 +396,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
   // serving a browser with no agent attached still has a HUD to answer, and a report that reads
   // "nothing recorded yet" over a month of history on disk is the worst version of this feature.
   initImpact({
+    sdkVersion: SERVER_VERSION,
     reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
     // The daemon owns both sides of this seam, so it is the layer that may join them: the cache
     // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed
@@ -546,6 +547,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // chokepoint opens it lazily), but a tab that connected before the first tool call was pushed
   // nothing, so the report read "nothing recorded yet" over a file with history in it.
   initImpact({
+    sdkVersion: SERVER_VERSION,
     reticleRoot: options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
     // The daemon owns both sides of this seam, so it is the layer that may join them: the cache
     // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed

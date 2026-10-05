@@ -26,3 +26,41 @@ describe('panelSlides', () => {
     ]);
   });
 });
+
+/** The rail edited without a release: the daemon's notices replace the bundled value slides. */
+describe('remote notices', () => {
+  it('renders the notices the daemon chose, escaped, in place of the bundled slides', () => {
+    const slides = panelSlides(undefined, false, [
+      {
+        id: 'personas',
+        kicker: 'NEW',
+        title: 'Five personas <b>at once</b>',
+        detail: 'Drives every journey',
+        cta: { label: 'See how', url: 'https://reticle.sh/harness?a=1&b=2' },
+      },
+    ]);
+    expect(slides.map((s) => s.id)).toEqual(['notice-personas']);
+    const host = document.createElement('div');
+    host.innerHTML = slides[0]?.html ?? '';
+    expect(host.querySelector('b')).toBeNull();
+    expect(host.textContent).toContain('Five personas <b>at once</b>');
+    expect(host.querySelector('a')?.getAttribute('href')).toBe(
+      'https://reticle.sh/harness?a=1&b=2',
+    );
+  });
+
+  it('drops a notice that fails the schema, such as a link off our sites', () => {
+    const slides = panelSlides(undefined, false, [
+      { id: 'ok', title: 'Fine' },
+      { id: 'phish', title: 'Bad', cta: { label: 'Go', url: 'https://evil.example/x' } },
+      'not a notice',
+    ]);
+    expect(slides.map((s) => s.id)).toEqual(['notice-ok']);
+  });
+
+  it('keeps the bundled slides when the daemon sent none', () => {
+    expect(panelSlides(undefined, false, []).map((s) => s.id)).toEqual(
+      panelSlides(undefined, false).map((s) => s.id),
+    );
+  });
+});

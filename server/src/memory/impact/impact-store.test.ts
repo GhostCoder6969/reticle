@@ -237,3 +237,33 @@ describe('the dashboard link', () => {
     expect(new ImpactStore({ reticleRoot: dir }).snapshot().dashboardUrl).toBeUndefined();
   });
 });
+
+/** The rail's notices: chosen by the daemon for THIS machine, never the whole file. */
+describe('the notices in the snapshot', () => {
+  const home = (): string => mkdtempSync(join(tmpdir(), 'impact-notices-home-'));
+  const entries = [
+    { id: 'for-everyone', title: 'Hello' },
+    { id: 'signed-out-only', title: 'Sign in', audience: { signedIn: false } },
+    { id: 'needs-newer', title: 'Later', minSdk: '9.0.0' },
+  ];
+
+  it('carries only the notices that apply to this machine', () => {
+    const store = new ImpactStore({
+      reticleRoot: join(mkdtempSync(join(tmpdir(), 'impact-notices-')), '.reticle'),
+      globalRoot: home(),
+      account: () => ({ signedIn: true }),
+      notices: { read: () => entries },
+      sdkVersion: '3.6.0',
+    });
+    expect(store.snapshot().notices).toEqual([{ id: 'for-everyone', title: 'Hello' }]);
+  });
+
+  it('leaves the field out when nothing applies, so the bundled slides show', () => {
+    const store = new ImpactStore({
+      reticleRoot: join(mkdtempSync(join(tmpdir(), 'impact-notices-')), '.reticle'),
+      globalRoot: home(),
+      notices: { read: () => [] },
+    });
+    expect(store.snapshot().notices).toBeUndefined();
+  });
+});

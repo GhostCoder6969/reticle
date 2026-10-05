@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
 import { harnessOfferSource, type OfferSource } from '@/memory/cloud/harness-offer.js';
 import type { ConfigSource } from '@/memory/cloud/harness-config.js';
+import { hudNoticesSource, type NoticesSource } from '@/memory/cloud/hud-notices-source.js';
+import { selectNotices } from '@reticlehq/core/hud';
 import {
   ReticleDir,
   IMPACT_DAILY_BUCKETS,
@@ -118,6 +120,11 @@ function writeScope(path: string, scope: ImpactScope): void {
     // memory and the next write attempt carries them.
   }
 }
+
+/** The daemon's cached copy of the HUD notices file, beside the machine-wide impact record. */
+const HUD_NOTICES_CACHE_FILE = 'hud-notices.json';
+/** When the caller did not say which build this is: matches only notices with no `minSdk`. */
+const UNKNOWN_SDK_VERSION = '0.0.0';
 
 /** YYYY-MM-DD in local time - the day boundary a person recognises, not UTC's. */
 export function isoDay(now: number): string {
@@ -247,6 +254,8 @@ export class ImpactStore {
   /** Where this workspace stands with the free harness offer. Cached; see harness-offer.ts. */
   readonly #offer: OfferSource;
   readonly #config: ConfigSource;
+  readonly #notices: NoticesSource;
+  readonly #sdkVersion: string;
 
   constructor(opts: {
     reticleRoot: string;
@@ -259,6 +268,10 @@ export class ImpactStore {
     /** Where the workspace stands with the free harness offer. Injected so no test touches a network. */
     offer?: OfferSource;
     config?: ConfigSource;
+    /** The HUD rail's notices. Defaults to the daemon's cached copy of the published file. */
+    notices?: NoticesSource;
+    /** This build's version, for notices that need a newer SDK. Passed in: the store reads no package. */
+    sdkVersion?: string;
   }) {
     this.#paths = impactPaths(opts.reticleRoot, opts.globalRoot ?? homedir());
     // Resolved per snapshot, not cached: a user who runs `reticle login` in another terminal must
@@ -270,6 +283,12 @@ export class ImpactStore {
     // The claim happens in the console, so the link this project was linked to IS the claim link —
     // built here rather than in the HUD, which has no way to know where this project points.
     this.#offer = opts.offer ?? harnessOfferSource(process.env, () => this.#dashboardUrl);
+    this.#notices =
+      opts.notices ??
+      hudNoticesSource({
+        cacheFile: join(opts.globalRoot ?? homedir(), ReticleDir.ROOT, HUD_NOTICES_CACHE_FILE),
+      });
+    this.#sdkVersion = opts.sdkVersion ?? UNKNOWN_SDK_VERSION;
     // No default: the loader lives in `features/harness` and this file may not reach for it.
     // A store built without one simply reports no harness config, which the HUD renders as no row.
     this.#config = opts.config ?? { read: () => undefined };
@@ -316,6 +335,15 @@ export class ImpactStore {
     // Absent stays absent: the HUD reads that as "we have not heard" and renders no control.
     const cfg = this.#config.read();
     if (cfg !== undefined) snap.harnessConfig = cfg;
+    // Chosen here, where the account and the entitlement are both known. Absent when nothing applies,
+    // so the HUD falls back to the slides bundled with the SDK.
+    const notices = selectNotices(this.#notices.read(), {
+      signedIn: snap.account?.signedIn,
+      entitled: cfg?.harnessEntitled,
+      sdkVersion: this.#sdkVersion,
+      now: this.#now(),
+    });
+    if (0 < notices.length) snap.notices = notices;
     return snap;
   }
 

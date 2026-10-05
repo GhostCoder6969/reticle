@@ -257,6 +257,15 @@ export const ImpactSnapshotSchema = z.object({
    * cannot be honoured is worse than showing none.
    */
   harnessConfig: HarnessConfigSchema.optional(),
+  /**
+   * The rail's notices, already chosen for this machine by the daemon (see `hud-notices.ts`).
+   * Absent means the daemon has nothing newer than the SDK's bundled slides, which then show.
+   *
+   * Loose here on purpose: this schema is on every page's first load, and the full notice schema
+   * (link rules, id pattern) is not. The lazily loaded panel validates each notice with
+   * `HudNoticeSchema` from `@reticlehq/core/hud` before rendering it.
+   */
+  notices: z.array(z.unknown()).max(8).optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

@@ -129,7 +129,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * leaf the browser can import without the schemas is still the right shape, and the guard's
    * ceiling was raised with that reasoning written beside it.
    */
-  'core/src/artifacts': 14,
+  'core/src/artifacts': 15,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
@@ -288,7 +288,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
   // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
   // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
-  'server/src/memory/cloud': 11,
+  'server/src/memory/cloud': 12,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

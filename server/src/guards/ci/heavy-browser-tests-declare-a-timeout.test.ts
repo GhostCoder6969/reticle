@@ -241,7 +241,8 @@ function loopBody(text: string, headOpen: number): string | null {
 // called itself the fifteenth; landing them together is what makes it sixteen.
 // 17: the startup byte-budget eviction, which is the first caller the budget has ever had.
 // 18: merging duplicate drives, which has to seed the copies it merges.
-const EXPECTED_IO_LOOP_FILES = 18;
+// 19: the HUD notices cache, whose last-good copy is rewritten once per failure mode.
+const EXPECTED_IO_LOOP_FILES = 19;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

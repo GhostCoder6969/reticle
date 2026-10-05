@@ -57,7 +57,11 @@ const CHAT_PILL_LABEL = 'Open agent chat';
 const SETTINGS_LABEL = 'Settings';
 const AGENT_LOG_TITLE = 'Agent Log';
 const EXIT_LABEL = 'Exit';
-function paintPromo(root: HTMLElement, offer: OfferState | undefined): void {
+function paintPromo(
+  root: HTMLElement,
+  offer: OfferState | undefined,
+  notices: readonly unknown[] = [],
+): void {
   const target = root.querySelector<HTMLElement>(`[${RAIL_PROMO_ATTR}]`);
   if (null === target) return;
   let dismissed = false;
@@ -72,7 +76,7 @@ function paintPromo(root: HTMLElement, offer: OfferState | undefined): void {
   } catch {
     storage = undefined;
   }
-  paintCarousel(target, panelSlides(offer, dismissed), storage);
+  paintCarousel(target, panelSlides(offer, dismissed, notices), storage);
 }
 
 interface HudShellCallbacks {
@@ -157,6 +161,7 @@ export class HudShell {
       }
     | undefined;
   #pushedOffer: OfferState | undefined;
+  #pushedNotices: readonly unknown[] = [];
   /** Torn down with the shell: the delegated listeners for every account menu under the root. */
   #accountTeardown: (() => void) | undefined;
 
@@ -210,9 +215,10 @@ export class HudShell {
    * snapshot never comes.
    */
   /** Keep the Agent Log carousel current, including when the initial offer push beats mount. */
-  paintOffer(offer: OfferState | undefined): void {
+  paintOffer(offer: OfferState | undefined, notices: readonly unknown[] = []): void {
     this.#pushedOffer = offer;
-    if (this.#root !== undefined) paintPromo(this.#root, offer);
+    this.#pushedNotices = notices;
+    if (this.#root !== undefined) paintPromo(this.#root, offer, notices);
   }
 
   constructor(callbacks: HudShellCallbacks = {}) {
@@ -398,7 +404,7 @@ export class HudShell {
     this.#settings.mount(root);
     this.#report.mount(root);
     this.#chatViews.mount(root);
-    paintPromo(root, this.#pushedOffer);
+    paintPromo(root, this.#pushedOffer, this.#pushedNotices);
     // The toolbar's lit state FOLLOWS the panels, rather than being set by whoever was clicked.
     // Set at click time, a button stayed lit after its panel was closed by the panel that replaced
     // it - two icons active, one panel open. The observer is the only place that can be right for

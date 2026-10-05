@@ -233,7 +233,7 @@ export class Presenter {
         // describe different moments. Project counts, not machine-wide: the question the menu answers
         // is "what has happened HERE".
         // The one thing this HUD advertises, from the same snapshot as everything else it shows.
-        this.#shell.paintOffer(snapshot.harnessOffer);
+        this.#shell.paintOffer(snapshot.harnessOffer, snapshot.notices);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
         this.#shell.paintHarness(snapshot.harnessConfig);
         this.#shell.paintImpact(snapshot.project.counts.verdicts);

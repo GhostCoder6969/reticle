@@ -6,6 +6,8 @@
  */
 import { offerHtml, type OfferState } from './offer-card.js';
 import type { Slide } from './carousel.js';
+import { HudNoticeSchema, type HudNotice } from '@reticlehq/core/hud';
+import { esc } from '../chrome/presenter-safe-html.js';
 
 /** Harness comes with a plan or trial; the console has no /harness page (it redirected home). */
 const HARNESS_URL = 'https://app.reticle.sh/settings?group=billing';
@@ -26,10 +28,47 @@ const VALUE_SLIDES: readonly Slide[] = [
   },
 ];
 
-export function panelSlides(offer: OfferState | undefined, offerDeclined: boolean): Slide[] {
+/** Slide ids for remote notices are namespaced so they can never collide with a bundled one. */
+const NOTICE_SLIDE_PREFIX = 'notice-';
+
+/** One notice the daemon chose, as a slide. Every field is text from the network, so all of it is escaped. */
+function noticeSlide(notice: HudNotice): Slide {
+  const kicker =
+    notice.kicker === undefined
+      ? ''
+      : `<span class="reticle-promo-kicker">${esc(notice.kicker)}</span>`;
+  const detail =
+    notice.detail === undefined
+      ? ''
+      : `<span class="reticle-promo-detail">${esc(notice.detail)}</span>`;
+  const link =
+    notice.cta === undefined
+      ? ''
+      : `<a data-reticle-promo-link class="reticle-promo-link" href="${esc(notice.cta.url)}" target="_blank" rel="noopener noreferrer">${esc(notice.cta.label)} →</a>`;
+  return {
+    id: `${NOTICE_SLIDE_PREFIX}${notice.id}`,
+    html: `<div class="reticle-promo-copy">${kicker}<strong class="reticle-promo-title">${esc(notice.title)}</strong>${detail}${link}</div>`,
+  };
+}
+
+/**
+ * The rail's slides: a live harness offer first when there is one, then the daemon's notices, or the
+ * bundled value slides when the daemon sent none (offline, an older daemon, nothing applies).
+ */
+export function panelSlides(
+  offer: OfferState | undefined,
+  offerDeclined: boolean,
+  notices: readonly unknown[] = [],
+): Slide[] {
   const harnessOffer = offerHtml(offer, offerDeclined);
+  // Validated here, in the lazy panel, with the full schema: the snapshot carries them loosely so
+  // the first-load schema stays small. A notice that fails is dropped on its own.
+  const valid = notices.flatMap((n): HudNotice[] => {
+    const parsed = HudNoticeSchema.safeParse(n);
+    return parsed.success ? [parsed.data] : [];
+  });
   return [
     ...('' === harnessOffer ? [] : [{ id: SLIDE_ID.OFFER, html: harnessOffer }]),
-    ...VALUE_SLIDES,
+    ...(0 < valid.length ? valid.map(noticeSlide) : VALUE_SLIDES),
   ];
 }

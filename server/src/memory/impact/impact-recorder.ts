@@ -37,6 +37,7 @@ let storeOpts: {
   config?: ConfigSource;
   configForRoot?: (root: string) => ConfigSource;
   globalRoot?: string;
+  sdkVersion?: string;
 } = {};
 
 /** Get-or-create the store for one root. */
@@ -78,17 +79,20 @@ export function initImpact(opts: {
   now?: () => number;
   /** Where the machine-wide `~/.reticle` lives. Tests pass a temp dir so they never write the real one. */
   globalRoot?: string;
+  /** This build's version, for HUD notices that need a newer SDK. */
+  sdkVersion?: string;
 }): ImpactStore | undefined {
   // No root, no record. Programmatic callers and test doubles build their own deps and are not
   // obliged to carry one, and a courtesy counter must never be the reason a tool call throws.
   if (opts.reticleRoot === undefined || 0 === opts.reticleRoot.length) return storeFor(undefined);
   if (defaultRoot === undefined) {
     defaultRoot = opts.reticleRoot;
-    const { projectName, now, config, configForRoot, globalRoot } = opts;
+    const { projectName, now, config, configForRoot, globalRoot, sdkVersion } = opts;
     storeOpts = {
       ...(projectName === undefined ? {} : { projectName }),
       ...(now === undefined ? {} : { now }),
       ...(globalRoot === undefined ? {} : { globalRoot }),
+      ...(sdkVersion === undefined ? {} : { sdkVersion }),
       ...(config === undefined ? {} : { config }),
       ...(configForRoot === undefined ? {} : { configForRoot }),
     };
