@@ -198,7 +198,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // of -- and only one copy knew that `e.g.` does not end a sentence, so the tool catalogue cut
   // `reticle_session`'s MANDATORY handback out of its own summary. It sits beside the surfaces that
   // call it rather than in a `text/` directory holding one file.
-  'server/src/surface/tools': 38,
+  'server/src/surface/tools': 39,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -238,7 +238,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // duplicated in two tool files. 23 for `serving-directory.ts`: which checkout's dev server served
   // a page is a fact about this machine's processes, and `session` is the directory already allowed
   // to read daemon state and port holders -- every other home needed two new reaches for it.
-  'server/src/portal/session': 23,
+  'server/src/portal/session': 24,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others

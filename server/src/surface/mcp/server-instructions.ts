@@ -99,13 +99,13 @@ const firstMoveFor = (
   appHere: boolean,
 ): string => `FIRST: no app has ever connected to Reticle in this project, so nothing here can be verified yet. Having these tools is not the same as being set up — the tools reach a daemon, and the daemon has nothing to look at until the app itself is instrumented.
 
-Fix that before anything else: run \`npx @reticlehq/server init\` in the project. It starts the dev server and opens the app itself; only if a dev server was ALREADY running without Reticle, restart it and reload the tab. Confirm with ${v.sessions} — a session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
+Fix that first: call ${v.sessions}. Its first call wires the app (\`init\`, dev server, browser) and \`wired\` lists the files it changed; tell the user. If it answers \`run_init\`, run that command in the app's directory. A session listed there is the proof, and until one appears no other tool can tell you anything about this app.${appHere ? TELL_THE_USER : ''}`;
 
 const UNWIRED_LEAD_END = 'can tell you anything about this app.';
 
-// An agent never asked to verify anything never reads "fix that first"; this makes it raise init.
+// An agent never asked to verify anything never reads "fix that first"; this makes it raise wiring.
 const TELL_THE_USER =
-  ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to run it. Run it only if they agree; if they decline, do not raise it again.';
+  ' This directory holds a web app that is not wired yet: in your first reply, even if their request is unrelated, tell the user in one line and offer to wire it (the first session call does it). Do it only if they agree; if they decline, do not raise it again.';
 
 /** The nudge set for the AGENT's directory: a shared daemon briefs from where IT started. */
 export function localizeInstructions(instructions: string, appHere: boolean): string {

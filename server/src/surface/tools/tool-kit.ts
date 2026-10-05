@@ -4,6 +4,7 @@
  * in its own leaf module (no dependency on any tool array) so the per-group tool files can import it
  * without a circular import — `tools.ts` assembles the groups and re-exports `ToolDef`/`ToolDeps`.
  */
+import type { FirstRunWiring } from '@/portal/session/first-run-wiring.js';
 import { z } from 'zod';
 import { type ProjectId, ReticleCommand, SnapshotMode } from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -71,6 +72,8 @@ export interface ToolDeps<Ext = unknown> {
    * it, so two agents on one origin never share a tab (#1226). Absent ⇒ every acquire gets its own.
    */
   attachId?: string;
+  /** Wires the app on the agent's first use, instead of at installation. Absent: tell, do not wire. */
+  firstRun?: FirstRunWiring;
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */

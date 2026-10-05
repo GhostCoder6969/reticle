@@ -1,4 +1,5 @@
 import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness-config.js';
+import { firstRunWiring } from './portal/session/first-run-wiring.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
@@ -721,6 +722,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     now,
     bridgePort: port,
     browserProbe: probeLaunchableChromium,
+    firstRun: firstRunWiring({ port, cliPath: process.argv[1] ?? '' }),
     // A finished verification should not sit behind a one-minute timer — see ToolDeps.onRunPersisted.
     onRunPersisted: (): void => cloudSync.nudge(),
   };
