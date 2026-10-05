@@ -1,3 +1,22 @@
+import { ReticleTool } from '@reticlehq/core';
+
+const LeaseAction = { ACQUIRE: 'acquire' } as const;
+
+const LeaseArgument = {
+  TOOL: 'tool',
+  ARGS: 'args',
+  ACTION: 'action',
+  URL: 'url',
+} as const;
+
+const OpenLaunchFailureCopy = {
+  NOTHING_OPENED: 'Nothing was opened.',
+  OS_BROWSER: 'This command asks the OS to open a url in your default browser',
+  LAUNCH_FAILED: (launcher: string) => `(\`${launcher}\` on this platform) and that failed,`,
+  OPEN_MANUALLY: 'so open the url yourself or set a default browser.',
+  RETICLE_BROWSER: 'If you are using Reticle tools, open it in a Reticle-owned browser with',
+} as const;
+
 /**
  * What `reticle open` says when it launched a URL and no session appeared.
  *
@@ -36,5 +55,15 @@ export function openFailureNote(port: number, requestedPort: number): string {
     `own connect failures there, including the one it refuses to make from a ` +
     `non-localhost host, which needs BOTH allowNonLocalhost: true AND a pairing token ` +
     `(~/.reticle/pairing-token) — the flag alone is not sufficient.`
+  );
+}
+
+/** Recovery when the OS could not open a URL: agents can use Reticle's browser lease instead. */
+export function openLaunchFailureNote(url: string, launcher: string): string {
+  return (
+    `${OpenLaunchFailureCopy.NOTHING_OPENED} ${OpenLaunchFailureCopy.OS_BROWSER} ` +
+    `${OpenLaunchFailureCopy.LAUNCH_FAILED(launcher)} ${OpenLaunchFailureCopy.OPEN_MANUALLY} ` +
+    `${OpenLaunchFailureCopy.RETICLE_BROWSER} ` +
+    `\`${ReticleTool.RUN} { ${LeaseArgument.TOOL}: "${ReticleTool.LEASE}", ${LeaseArgument.ARGS}: { ${LeaseArgument.ACTION}: "${LeaseAction.ACQUIRE}", ${LeaseArgument.URL}: ${JSON.stringify(url)} } }\`.`
   );
 }

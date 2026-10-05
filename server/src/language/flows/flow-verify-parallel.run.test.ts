@@ -80,8 +80,13 @@ describe('parallel flow_verify persists a verification run artifact', () => {
   it('calls persistAndSyncVerificationRun when the parallel path runs', async () => {
     const result = await verify.handler(deps, { parallel: 2 });
     expect(persistSpy).toHaveBeenCalledOnce();
-    const [, timed, projectId] = persistSpy.mock.calls[0] as [unknown, unknown[], string];
-    expect(projectId).toBe('proj-123');
+    const [, timed, target] = persistSpy.mock.calls[0] as [
+      unknown,
+      unknown[],
+      { projectId: string; origin?: string },
+    ];
+    // The project AND the origin it was served from: the run lands in the checkout that served it.
+    expect(target).toEqual({ projectId: 'proj-123', origin: 'http://localhost:3000' });
     expect(timed).toHaveLength(2);
     expect(result).toHaveProperty('status');
   });

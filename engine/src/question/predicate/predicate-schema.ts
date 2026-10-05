@@ -22,25 +22,15 @@ import {
 export { PredicateSchema } from '@reticlehq/core';
 export type { Predicate, PropertyAssertion } from '@reticlehq/core';
 
-/**
- * Element-query fields an agent writes FLAT on an `element` predicate instead of nested under
- * `query`. `reticle_query` takes exactly these at the top level, so an agent that has just located
- * something writes the same words again when it asserts on it — and got `query: Required` plus an
- * `unknown field` list for its trouble. Lifting them is unambiguous: they have no other meaning on
- * this kind.
+/*
+ * This file used to keep its own list of element-query fields, and issue #1375 is what that cost:
+ *
+ * core's copy had fallen four fields behind `ElementQuerySchema` (`scope`, `self`,
+ * `attrs`, `source`) while this one had not, so the two disagreed about what a flat element
+ * predicate may say. The list is gone: `residualQueryChecks` walks the query's OWN keys instead —
+ * the fields the caller actually wrote — which cannot fall behind a schema the query was parsed
+ * against, and costs no new core import (the engine's borrow count is a ceiling, not a budget).
  */
-const ELEMENT_QUERY_FIELDS = [
-  'by',
-  'value',
-  'role',
-  'name',
-  'text',
-  'label',
-  'placeholder',
-  'testid',
-  'alt',
-  'component',
-] as const;
 
 /**
  * The locator fields the browser actually CONSUMES for a given query — mirrors the precedence in
@@ -57,16 +47,41 @@ const ELEMENT_QUERY_FIELDS = [
  */
 function usedQueryFields(query: ElementQuery): ReadonlySet<string> {
   const used = new Set<string>();
+  // `scope`, `attrs` and `self` are not locator fields, so no branch below consumes them and none is
+  // dropped: `scope` narrows WHERE the search runs (resolved before any locator branch runs),
+  // `attrs` projects the match, and `self` selects the scope root. Claiming these here — whatever
+  // their value — is what keeps them from being refused for merely existing.
+  //
+  // `source` is deliberately NOT one of them. It IS a locator — the anchor `component` is, consumed
+  // on exactly the same two branches — and it is claimed there and only there. Claiming it here too
+  // is what let a `by`+`value` query, or a `self: true` one, report the locator as having used a
+  // `source` it never read: the browser resolves those by `by`+`value` (or the scope root) and
+  // returns before `findBySource` is reached, so the predicate could pass for an element other than
+  // the one the caller's source location identified. Unclaimed, it falls through to the residual
+  // walk and is refused — exactly as `component` already is in the same position.
+  if (query.scope !== undefined) used.add('scope');
+  if (query.attrs !== undefined) used.add('attrs');
+  if (query.self !== undefined) used.add('self');
   // The browser's `self` branch checks subtree text when supplied, but skips every other locator.
   // Mark only text as consumed so role/name/etc. remain residual checks on the returned descriptor.
   if (true === query.self) return query.text === undefined ? used : used.add('text');
   if (query.by !== undefined && query.value !== undefined) {
     used.add('by').add('value');
     if (QueryBy.ROLE === query.by) used.add('name');
-    if (QueryBy.COMPONENT === query.by) used.add('component');
+    // `by: "component"` resolves through `findByComponent`, which tries the source stamp first and
+    // falls back to the component name — so a `source` written here IS consumed.
+    if (QueryBy.COMPONENT === query.by) {
+      used.add('component');
+      if (query.source !== undefined) used.add('source');
+    }
     return used;
   }
-  if (query.component !== undefined || query.source !== undefined) return used.add('component');
+  // The auto-anchor branch, reached only without `by`+`value`: `source` (precise) then `component`.
+  if (query.component !== undefined || query.source !== undefined) {
+    used.add('component');
+    if (query.source !== undefined) used.add('source');
+    return used;
+  }
   if (query.role !== undefined) return used.add('role').add('name');
   for (const field of ['text', 'label', 'placeholder', 'testid', 'alt'] as const) {
     if (query[field] !== undefined) return used.add(field);
@@ -117,7 +132,10 @@ export function residualQueryChecks(query: ElementQuery): ResidualQueryChecks {
   const used = usedQueryFields(query);
   const checks: [string, string][] = [];
   const unusable: string[] = [];
-  for (const field of ELEMENT_QUERY_FIELDS) {
+  // The query's own keys, not a list beside the schema. Every field here was written by the caller
+  // and survived parsing, so it is one the locator either consumes or drops — which is the whole
+  // question. Reading them off the query also means the set cannot drift from `ElementQuerySchema`.
+  for (const field of Object.keys(query) as (keyof ElementQuery)[]) {
     const want = query[field];
     if (want === undefined || used.has(field)) continue;
     if ('string' === typeof want && RESIDUAL_CHECKS[field] !== undefined)

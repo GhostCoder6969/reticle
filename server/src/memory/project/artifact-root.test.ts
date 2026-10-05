@@ -130,6 +130,84 @@ describe('resolveArtifactRoot', () => {
     expect(r.candidates).toEqual(['/repo', '/worktree']);
   });
 
+  /**
+   * Worktree-per-PR: every worktree carries the same committed `.reticle.json`, so the projectId
+   * cannot tell them apart — but the dev server that served the page runs inside exactly one of
+   * them. That directory is an observed fact, not a guess, and it breaks the tie.
+   */
+  describe('two checkouts, and the serving dev server runs in one of them', () => {
+    const twoCheckouts = (): ReturnType<typeof candidatesOf> =>
+      candidatesOf([
+        { path: '/repo/.reticle.json', directory: '/repo', projectId: 'acme-web-9f3c1d' },
+        { path: '/wt/pr-7/.reticle.json', directory: '/wt/pr-7', projectId: 'acme-web-9f3c1d' },
+      ]);
+
+    it('resolves to the checkout the serving dev server runs in', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/wt/pr-7',
+      });
+
+      expect(r.root).toBe(join('/wt/pr-7', ReticleDir.ROOT));
+      expect(r.reason).toBe(ArtifactRootReason.MATCHED_PROJECT);
+    });
+
+    it('accepts a dev server running in a subdirectory of the checkout', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/wt/pr-7/apps/web',
+      });
+
+      expect(r.root).toBe(join('/wt/pr-7', ReticleDir.ROOT));
+    });
+
+    /** `.claude/worktrees/x` lives INSIDE the primary checkout; the deeper checkout is the server's. */
+    it('picks the deepest checkout when one sits inside the other', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: candidatesOf([
+          { path: '/repo/.reticle.json', directory: '/repo', projectId: 'acme-web-9f3c1d' },
+          {
+            path: '/repo/.claude/worktrees/x/.reticle.json',
+            directory: '/repo/.claude/worktrees/x',
+            projectId: 'acme-web-9f3c1d',
+          },
+        ]),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/repo/.claude/worktrees/x',
+      });
+
+      expect(r.root).toBe(join('/repo/.claude/worktrees/x', ReticleDir.ROOT));
+    });
+
+    it('still refuses when the serving directory is in neither checkout', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/somewhere/else',
+      });
+
+      expect(r.reason).toBe(ArtifactRootReason.AMBIGUOUS);
+      expect(r.root).toBe(DAEMON_ROOT);
+    });
+
+    it('does not mistake a sibling with a shared prefix for a parent', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/wt/pr-77',
+      });
+
+      expect(r.reason).toBe(ArtifactRootReason.AMBIGUOUS);
+    });
+  });
+
   it('ignores a discovered config that declares no projectId at all', () => {
     const r = resolveArtifactRoot({
       projectId: asProjectId('acme-web-9f3c1d'),
@@ -297,6 +375,73 @@ describe('a root for a session whose project we cannot name', () => {
     expect(
       unmatchedRoot({ daemonRoot: '/repo/app/.reticle', daemonIsProject: true, home: '/home/u' }),
     ).toBe('/repo/app/.reticle');
+  });
+
+  /**
+   * A worktree's flows and intents land in the main checkout (#1244).
+   *
+   * `daemonIsProject` answers "is the daemon sitting in SOME Reticle project", and the code below
+   * read it as "this session's project". Run the daemon in repo A and connect an app from a git
+   * worktree B that declares its OWN projectId: B is a named project discovery cannot see (it walks
+   * out from A's cwd and never crosses into a sibling checkout), so `resolveArtifactRoot` answers
+   * NO_MATCH, and the old unconditional `if (daemonIsProject) return daemonRoot` handed B's ledger
+   * to A. Two projects, one `.reticle/`, and the returned path named A.
+   */
+  it('refuses the daemon root for a named project that is NOT the daemon’s own', () => {
+    const root = unmatchedRoot({
+      daemonRoot: '/repo/main/.reticle',
+      daemonIsProject: true,
+      daemonProjectId: asProjectId('main-repo-1a2b'),
+      home: '/home/u',
+      projectId: asProjectId('worktree-b-3c4d'),
+    });
+
+    expect(root, 'the main checkout must not receive a worktree’s artifacts').not.toBe(
+      '/repo/main/.reticle',
+    );
+    expect(root).toBe(join('/home/u', ReticleDir.ROOT, UNMATCHED_SUBDIR, 'worktree-b-3c4d'));
+  });
+
+  it('still answers with the daemon root when the session IS the daemon’s own project', () => {
+    expect(
+      unmatchedRoot({
+        daemonRoot: '/repo/main/.reticle',
+        daemonIsProject: true,
+        daemonProjectId: asProjectId('main-repo-1a2b'),
+        home: '/home/u',
+        projectId: asProjectId('main-repo-1a2b'),
+      }),
+    ).toBe('/repo/main/.reticle');
+  });
+
+  /**
+   * The pre-2.0 SDK names no project, so there is nothing to disagree with. A daemon in its own
+   * project keeps writing to itself, which is the case this fallback was written for.
+   */
+  it('keeps the daemon root when the session named no project at all', () => {
+    expect(
+      unmatchedRoot({
+        daemonRoot: '/repo/main/.reticle',
+        daemonIsProject: true,
+        daemonProjectId: asProjectId('main-repo-1a2b'),
+        home: '/home/u',
+      }),
+    ).toBe('/repo/main/.reticle');
+  });
+
+  /**
+   * The daemon has a `.reticle/` but no `.reticle.json` — it was invited in by an older Reticle,
+   * or somebody deleted the config. It cannot prove the named project is its own, so it declines.
+   */
+  it('declines for a named project when the daemon’s own id is unknown', () => {
+    const root = unmatchedRoot({
+      daemonRoot: '/repo/main/.reticle',
+      daemonIsProject: true,
+      home: '/home/u',
+      projectId: asProjectId('worktree-b-3c4d'),
+    });
+
+    expect(root).toBe(join('/home/u', ReticleDir.ROOT, UNMATCHED_SUBDIR, 'worktree-b-3c4d'));
   });
 
   it('keeps out of a directory that never asked for Reticle', () => {

@@ -39,7 +39,23 @@ it.skipIf(process.platform === 'win32')(
   },
 );
 
-it('restores packed builds, removes stale emitted files, and preserves checkout sources', () => {
+/**
+ * Run under a git hook (the pre-commit runs this suite), git exports GIT_DIR / GIT_INDEX_FILE for
+ * the OUTER repository, and every child git inherits them: the fixture's `commit` then landed in the
+ * outer index and re-fired the hook, and `restoreInstallPackages`'s `rev-parse HEAD` read the outer
+ * HEAD. The fixture repository has to be the only repository these calls can see.
+ */
+function withoutOuterGit(run) {
+  const saved = Object.entries(process.env).filter(([key]) => key.startsWith('GIT_'));
+  for (const [key] of saved) delete process.env[key];
+  try {
+    return run();
+  } finally {
+    for (const [key, value] of saved) process.env[key] = value;
+  }
+}
+
+it('restores packed builds, removes stale emitted files, and preserves checkout sources', () => withoutOuterGit(() => {
   const scratch = mkdtempSync(join(tmpdir(), 'reticle-package-restore-'));
   const root = join(scratch, 'checkout');
   const artifacts = join(scratch, 'artifacts');
@@ -71,7 +87,7 @@ it('restores packed builds, removes stale emitted files, and preserves checkout 
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
-});
+}));
 
 /**
  * Git for the scratch repo only. Run from a pre-commit hook, the outer commit's GIT_INDEX_FILE (a

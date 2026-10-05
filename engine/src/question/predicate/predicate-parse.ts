@@ -147,16 +147,35 @@ const CALL_LEVEL_FIELDS: readonly string[] = [
 function misplacedCallFields(input: unknown): string {
   if ('object' !== typeof input || null === input) return '';
   const written = Object.keys(input);
-  const misplaced = CALL_LEVEL_FIELDS.filter((field) => written.includes(field));
-  if (0 === misplaced.length) return '';
-  const list = misplaced.join(', ');
-  // Named as a MOVE, not as a removal. Deleting the field is the reading of "unknown field" that
-  // costs the caller the thing it asked for.
-  return (
-    ` ${list} ${1 === misplaced.length ? 'is an argument' : 'are arguments'} of the CALL, not of ` +
-    `the predicate: ${1 === misplaced.length ? 'move it' : 'move them'} up beside \`until\` rather ` +
-    'than dropping it — nesting is why the predicate did not parse.'
+  const clauses: string[] = [];
+  // `element` is the one kind where a `ref` is not a call argument one level too deep but a locator
+  // written in the wrong place: the locator nests under `query`, so the retry is to move it inside
+  // `query` — not up beside `until`. That advice is misdirection here: on `act_and_wait` moving a
+  // `ref` up retargets the ACTION, and `reticle_assert` has no `until` at all, so the caller loses
+  // its target and still does not parse. Named as the field to write instead, so the retry keeps it.
+  const kind = (input as Record<string, unknown>)['kind'];
+  const refIsLocator =
+    'string' === typeof kind && PredicateKind.ELEMENT === kind && written.includes('ref');
+  if (refIsLocator) {
+    clauses.push(
+      '`ref` is not a locator on an `element` predicate: element predicates take `query` ' +
+        '(role/name/testid/text), not `ref` — put the locator inside `query`.',
+    );
+  }
+  const misplaced = CALL_LEVEL_FIELDS.filter(
+    (field) => written.includes(field) && !(refIsLocator && 'ref' === field),
   );
+  if (0 < misplaced.length) {
+    const list = misplaced.join(', ');
+    // Named as a MOVE, not as a removal. Deleting the field is the reading of "unknown field" that
+    // costs the caller the thing it asked for.
+    clauses.push(
+      `${list} ${1 === misplaced.length ? 'is an argument' : 'are arguments'} of the CALL, not of ` +
+        `the predicate: ${1 === misplaced.length ? 'move it' : 'move them'} up beside \`until\` rather ` +
+        'than dropping it — nesting is why the predicate did not parse.',
+    );
+  }
+  return 0 === clauses.length ? '' : ` ${clauses.join(' ')}`;
 }
 
 /**

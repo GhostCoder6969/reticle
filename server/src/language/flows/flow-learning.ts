@@ -1,17 +1,14 @@
-import type { ProjectId, FlowReplayResult } from '@reticlehq/core';
+import type { FlowReplayResult } from '@reticlehq/core';
 import { asString } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
+import { safeSessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import { replayNamedFlow } from './flow-replay-run.js';
 import { recordingSources, withLearnedSources } from './learned-sources.js';
 import { ReplayStatus } from '@reticlehq/core';
 
-function projectOf(deps: ToolDeps, args: Record<string, unknown>): ProjectId | undefined {
-  try {
-    return deps.sessions.resolve(asString(args['sessionId'])).projectId;
-  } catch {
-    return undefined;
-  }
+function targetOf(deps: ToolDeps, args: Record<string, unknown>): ProjectTarget {
+  return safeSessionTarget(deps, asString(args['sessionId']));
 }
 
 /**
@@ -41,8 +38,8 @@ export async function persistLearning(
   const name = asString(args['flowName']) ?? '';
   if (0 === name.length) return result;
   try {
-    const projectId = projectOf(deps, args);
-    await flowsForSession(deps, projectId).flows.recordLearned(name, learned, projectId);
+    const target = targetOf(deps, args);
+    await flowsForSession(deps, target).flows.recordLearned(name, learned, target.projectId);
   } catch {
     // Bookkeeping only.
   }
@@ -104,8 +101,9 @@ export async function persistSources(
   const name = asString(args['flowName']) ?? '';
   if (0 === name.length) return;
   try {
-    const projectId = projectOf(deps, args);
-    const store = flowsForSession(deps, projectId).flows;
+    const target = targetOf(deps, args);
+    const { projectId } = target;
+    const store = flowsForSession(deps, target).flows;
     const current = await store.load(name, projectId);
     // Read first so a flow that already names every file is never rewritten.
     if (!current.ok || withLearnedSources(current.value, sources) === undefined) return;

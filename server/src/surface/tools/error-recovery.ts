@@ -9,9 +9,11 @@
  * baseline stores). No clock, no IO — unit-testable in isolation.
  */
 
-import { RefusalReason, TRANSPORT_LIMITS } from '@reticlehq/core';
+import { RefusalReason, ReticleEnv, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { SELF_RECOVERING_MARKER } from '@/portal/session/no-session-diagnosis.js';
+import { BODY_CLAUSE_REFUSAL_OPENING } from '@reticlehq/engine/evidence/body-capture-remedy.js';
 import {
+  CHROMIUM_PATH_REFUSAL_PREFIX,
   chromiumInstallCommand,
   bundledPlaywrightVersion,
 } from '@/command/cli/doctor/browser/chromium-hint.js';
@@ -40,10 +42,21 @@ function capMessage(message: string): string {
 }
 
 /**
+ * A fixed phrase as a pattern for the table below, which matches on phrasing.
+ *
+ * The phrase comes from the module that throws it rather than being retyped here, and a constant is
+ * still text: escaped so a future reword containing `(` or `?` cannot turn into a pattern that means
+ * something else — or fails to compile at import time, taking the whole surface with it.
+ */
+function literally(phrase: string): RegExp {
+  return new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+}
+
+/**
  * Messages that already spell out the exact retry, so any hint we add can only argue with them.
  *
  * The no-session diagnosis is one (it inspected the machine and named the cause). The native-input
- * refusal is the other: it names the tool, the argument and the follow-up call to make instead — and
+ * refusal is another: it names the tool, the argument and the follow-up call to make instead — and
  * it was still collecting the defect ask, inviting a bug report about a refusal that had just told
  * the agent precisely what to do.
  */
@@ -53,6 +66,11 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   // the current ids" to a message that just named them contradicts the shorter path it offers, and
   // a contradicted instruction is how one agent came to retry a dead id twelve times.
   { match: /Connected right now:/i, reason: RefusalReason.NO_SESSION },
+  // The body-clause pre-flight: nothing ran, no action was spent, and the message names the setting
+  // to switch on — or says the page's SDK predates it, which is a limit and not a defect either. It
+  // was collecting the defect ask on top of its own remedy, so the envelope contradicted itself and
+  // asked for a bug report about somebody's connect() options.
+  { match: literally(BODY_CLAUSE_REFUSAL_OPENING), reason: RefusalReason.UNSUPPORTED },
 ];
 
 /** A message that already carries its own concrete next action, so nothing should be appended. */
@@ -230,6 +248,18 @@ export const RECOVERY = {
     '` if that is what is missing. Meanwhile drive ' +
     'a tab the human already has open — reticle_sessions lists them.',
   /**
+   * RETICLE_CHROMIUM_PATH names a browser the daemon cannot launch. The call was fine and so is the
+   * Playwright install, so neither a retry nor the install command can help: only the daemon's own
+   * environment can, and a running daemon keeps the values it started with.
+   */
+  CHROMIUM_PATH:
+    `Reticle cannot launch the browser ${ReticleEnv.CHROMIUM_PATH} names (the message above says ` +
+    'what is wrong with the path). The call itself was fine, so retrying it will not help, and ' +
+    'neither will installing Chromium. Ask the human to fix that path, or unset it to use ' +
+    "Playwright's own Chromium, in the environment the daemon starts from, then run " +
+    '`npx @reticlehq/server restart`. Meanwhile drive a tab the human already has open, which ' +
+    'reticle_sessions lists. This is configuration, not a Reticle defect: there is nothing to report.',
+  /**
    * The two ways a platform answer can refuse a drive. Neither is a fault, and both were telling the
    * agent that a perfectly understood refusal might be a defect in Reticle — which is how a person
    * who deliberately switched the harness off gets a bug report filed about their own decision.
@@ -259,6 +289,7 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   THROTTLED: RefusalReason.NOT_READY,
   COMMAND_TIMEOUT: RefusalReason.NOT_READY,
   NO_POOL: RefusalReason.NOT_READY,
+  CHROMIUM_PATH: RefusalReason.NOT_READY,
   TOKEN_REQUIRED: RefusalReason.NOT_READY,
   MISSING_BASELINE: RefusalReason.NO_MATCH,
   MISSING_RECORDING: RefusalReason.NO_MATCH,
@@ -288,6 +319,11 @@ const REASON_BY_HINT: ReadonlyMap<string, RefusalReason> = new Map(
 
 /** Ordered match rules; the first hit wins. Substrings track the thrown messages they recover. */
 const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
+  // First, because the message carries a path the user chose, and a path can hold any word a later
+  // rule keys on. Without it the variable's name read as a `reticle_*` tool and the agent was told
+  // its call failed the schema. Not anchored, so a launch error that wraps it is still caught. The
+  // prefix has no regex metacharacters, so it is used as is.
+  { match: new RegExp(CHROMIUM_PATH_REFUSAL_PREFIX), hint: RECOVERY.CHROMIUM_PATH },
   { match: /no browser session connected/i, hint: RECOVERY.NO_SESSION },
   { match: /multiple sessions connected/i, hint: RECOVERY.MULTIPLE_SESSIONS },
   { match: /no connected session with id/i, hint: RECOVERY.UNKNOWN_SESSION },
@@ -303,7 +339,8 @@ const RULES: readonly { readonly match: RegExp; readonly hint: string }[] = [
   // needs its own rule: none of them contains "no browser session connected" (the scope miss is
   // "no browser session FOR project 'x'", which is the opposite claim — sessions exist).
   {
-    match: /scope mismatch|session\(s\) ARE connected under a different project/i,
+    match:
+      /scope mismatch|session\(s\) ARE connected (?:under a different project|with no projectId)/i,
     hint: RECOVERY.SCOPE_MISMATCH,
   },
   { match: /^session disconnected$|session .* never connected/i, hint: RECOVERY.SESSION_GONE },

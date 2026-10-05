@@ -227,6 +227,9 @@ function resolvedStatus(
   return step.status;
 }
 
+/** Every client registration row is titled `MCP server (<client>)`; the closing hint names the unfinished ones. */
+const MCP_CLIENT_TITLE_PREFIX = 'MCP server (';
+
 const STATUS_SYMBOL: Record<StepStatus, string> = {
   [StepStatus.APPLY]: '✓',
   [StepStatus.MANUAL]: '⚠',
@@ -558,6 +561,8 @@ function report(
   // the app never dials the daemon and every tool answers "no browser session connected". `ok` was
   // hardcoded true, so a run that could not possibly work reported success.
   let connectPending = false;
+  // Other clients' registrations the run left for the reader, named for the closing hint.
+  const manualClients: string[] = [];
   for (const s of plan.steps) {
     // A side effect that failed to apply is reported as a manual step with its fallback command.
     const note = degraded.get(s.target);
@@ -582,6 +587,9 @@ function report(
       if (status === StepStatus.MANUAL) {
         manual++;
         if (isConnectStep(s.title)) connectPending = true;
+        if (s.target !== MCP_TARGET && s.title.startsWith(MCP_CLIENT_TITLE_PREFIX)) {
+          manualClients.push(s.title);
+        }
       }
       for (const line of detail.split('\n')) io.print(`      ${line}`);
     }
@@ -604,7 +612,7 @@ function report(
   }
   const mcpStatus = resolvedStatus(plan, MCP_TARGET, failed, skipped);
   if (!continuesToRuntime) {
-    io.print(restartHint(mcpStatus, devCommand));
+    io.print(restartHint(mcpStatus, devCommand, manualClients));
   }
   // Carried out even when the hint above was printed, because the RUNTIME path needs the same fact
   // and could not reach it: `restartHint` is only printed when this run stops at the files, and the

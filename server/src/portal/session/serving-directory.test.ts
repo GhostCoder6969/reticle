@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest';
+import { join, sep } from 'node:path';
+import type { DevServerEntry } from '@reticlehq/core';
+import { servingDirectoryOf } from './serving-directory.js';
+
+const MAIN = join(sep, 'repo', 'main');
+const CLONE = join(sep, 'repo', 'clone');
+
+/**
+ * Which checkout served a page, for the case where every git worktree declares one projectId. The
+ * announced dev server is exact and works everywhere; the listener's cwd covers frameworks with no
+ * announcing plugin. Both are injected here, so these specs start no processes.
+ */
+describe('servingDirectoryOf', () => {
+  const entry = (port: number, root: string): DevServerEntry => ({
+    port,
+    pid: 1,
+    root,
+    url: `http://localhost:${String(port)}`,
+    startedAt: 0,
+  });
+
+  it('prefers the dev server that announced this port', () => {
+    let shelledOut = false;
+    const dir = servingDirectoryOf('http://localhost:5174', {
+      devServers: () => [entry(5173, MAIN), entry(5174, CLONE)],
+      listenerCwd: () => {
+        shelledOut = true;
+        return MAIN;
+      },
+    });
+
+    expect(dir).toBe(CLONE);
+    expect(shelledOut).toBe(false);
+  });
+
+  it('falls back to the working directory of whatever listens on the port', () => {
+    const ports: number[] = [];
+    const dir = servingDirectoryOf('http://127.0.0.1:3001', {
+      devServers: () => [],
+      listenerCwd: (port) => {
+        ports.push(port);
+        return CLONE;
+      },
+    });
+
+    expect(dir).toBe(CLONE);
+    expect(ports).toEqual([3001]);
+  });
+
+  it('reads the default port when the origin names none', () => {
+    const ports: number[] = [];
+    servingDirectoryOf('http://localhost', {
+      devServers: () => [],
+      listenerCwd: (port) => {
+        ports.push(port);
+        return null;
+      },
+    });
+
+    expect(ports).toEqual([80]);
+  });
+
+  /** A remote page's port says nothing about a process on this machine. */
+  it('answers nothing for a page that is not served from this machine', () => {
+    let consulted = false;
+    const io = {
+      devServers: () => {
+        consulted = true;
+        return [entry(443, CLONE)];
+      },
+      listenerCwd: () => {
+        consulted = true;
+        return CLONE;
+      },
+    };
+
+    expect(servingDirectoryOf('https://staging.example.com', io)).toBeUndefined();
+    expect(servingDirectoryOf('not a url', io)).toBeUndefined();
+    expect(consulted).toBe(false);
+  });
+});

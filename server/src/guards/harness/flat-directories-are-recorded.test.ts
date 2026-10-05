@@ -100,7 +100,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * cross-layer reach out of the server and left the file count as the only cost.
    */
   'core/src/verdict': 16,
-  'core/src/wire': 16,
+  // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
+  // belongs to the contract rather than to either caller. The reason it is a file of its own rather
+  // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
+  // published API, and a page that only presses a key should not pull in the reader for a list of
+  // them. Recorded rather than grouped, by the same rule as the note underneath.
+  'core/src/wire': 17,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
@@ -230,8 +235,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on
   // purpose — the facts a session contributes to a verdict belong beside the session, not
-  // duplicated in two tool files.
-  'server/src/portal/session': 22,
+  // duplicated in two tool files. 23 for `serving-directory.ts`: which checkout's dev server served
+  // a page is a fact about this machine's processes, and `session` is the directory already allowed
+  // to read daemon state and port holders -- every other home needed two new reaches for it.
+  'server/src/portal/session': 23,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others
@@ -243,7 +250,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // claims) and `flow-author.ts` (who made a flow). Both are read by the store and by replay here,
   // and a subdirectory of their own would be a new reach for each of those. 34 once a dead flow
   // helper was deleted.
-  'server/src/language/flows': 34,
+  // 35 with `flow-cross-step.ts`: the whole-span contradiction subtraction, moved out of
+  // `flow-replay-run.ts` when the merged file crossed the 1000-line cap. It belongs in this
+  // directory rather than a subdirectory because `flow-cross-step.test.ts` sits here too and the
+  // pair is the whole rule.
+  'server/src/language/flows': 35,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the
@@ -272,6 +283,12 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // others. A flat file is cheaper than a new mutual pair. Group them when the address question
   // stops needing the caller's dependencies to answer it.
   'server/src/memory/project': 11,
+  // 11 when `memory-scope.ts` landed: which project a shared-memory READ is about, on the wire and
+  // in the response. Recorded rather than grouped, for the sibling reason above it. Its natural
+  // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a
+  // name collision the reach guard refuses outright; `cloud/scope/` would be a category invented
+  // for one member. The file is the sibling of `cloud-sync.ts`'s path constants and belongs flat.
+  'server/src/memory/cloud': 11,
   // 35 since the setup funnel: `onboarding-funnel.ts` (the one emit chokepoint), `onboarding-firsts.ts`
   // (the first look / act / verdict of a run, which only the daemon can witness) and
   // `install-trace.ts` (draining what the installer could not report, because it ran before there

@@ -18,7 +18,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, Verified, VerifiedReason } from '@reticlehq/core';
+import { ContradictionKind, PredicateKind, Verified, VerifiedReason } from '@reticlehq/core';
+import { declaresBodyIndependentChannel } from '../question/declared.js';
+import type { Predicate } from '../question/predicate/predicate-eval.js';
 import { decideVerified } from './verified.js';
 import { HonestyGrade, type HonestyBlock } from './honesty.js';
 
@@ -199,6 +201,26 @@ describe('a body-independent declared consequence outranks an unread payload', (
       honesty: clean,
       settled: true,
       outcomeUnread: ['POST /api/chat/messages'],
+    });
+    expect(v.verified).toBe(Verified.YES);
+    expect(v.verifiedReason).toBe(VerifiedReason.PROVED);
+  });
+
+  it('is YES when an anyOf body-independent channel held and a 2xx body went unread', () => {
+    const predicate: Predicate = {
+      kind: PredicateKind.ANY_OF,
+      predicates: [
+        { kind: PredicateKind.ROUTE, contains: '#dashboard' },
+        { kind: PredicateKind.ELEMENT, query: { testid: 'account-menu' } },
+      ],
+    };
+    const v = decideVerified({
+      pass: true,
+      declaredConsequence: true,
+      independentOfBody: declaresBodyIndependentChannel(predicate),
+      honesty: clean,
+      settled: true,
+      outcomeUnread: ['POST /api/login'],
     });
     expect(v.verified).toBe(Verified.YES);
     expect(v.verifiedReason).toBe(VerifiedReason.PROVED);

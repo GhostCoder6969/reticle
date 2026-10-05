@@ -26,7 +26,7 @@ import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 import { replayFlow } from './flow-replay.js';
-import { anchorPrecondition, anchorQueryArgs } from './flow-step-runners.js';
+import { anchorPrecondition, anchorQueryArgs, staleTargetResult } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
 import { buildDecision, unverifiableReason } from './decision.js';
@@ -42,7 +42,11 @@ import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js'
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { dischargeFlowIntent, flowIntentStatement, flowReplayVerdictId } from './flow-intent.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
-import { sessionRoot } from '@/memory/project/session-root.js';
+import {
+  safeSessionTarget,
+  sessionRoot,
+  type ProjectTarget,
+} from '@/memory/project/session-root.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { computeSegments } from '@/memory/journal/rollups.js';
 import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
@@ -54,11 +58,13 @@ import type { DeviationReport } from '@/memory/journal/deviation-report.js';
 import { homedir } from 'node:os';
 import { cloudFetch, syncRunRecordToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
+import { memoryReadUrl, scopedMemoryEntries } from '@/memory/cloud/memory-scope.js';
 import { consultSubjectFor, selectConsulted, type ConsultedMemory } from './flow-memory-consult.js';
 import { log } from '@/log.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
+import { CROSS_STEP_INDEX, crossStepOnly } from './flow-cross-step.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -191,7 +197,10 @@ async function consultProjectMemory(
     // session, and it is invisible: the feature simply never appears.
     const cloud = await resolveProjectCloud(deps.fs, root, homedir(), process.env);
     if (null === cloud.config || !cloud.policy.memory) return undefined;
-    const url = `${cloud.config.url}/v1/memory?subject=${encodeURIComponent(subject)}`;
+    // Scoped to the linked project. The key covers a whole workspace, so a read that named no
+    // project could be answered with ANOTHER repo's knowledge and this replay would carry it into a
+    // verdict as if it were this app's — see `memory-scope.ts` for the whole shape.
+    const url = memoryReadUrl(cloud.config.url, { projectId: cloud.projectId, subject });
     const res = await cloudFetch(url, {
       method: 'GET',
       headers: { authorization: `Bearer ${cloud.config.apiKey}` },
@@ -201,9 +210,14 @@ async function consultProjectMemory(
     // property yields the function itself, `.entries` on it is undefined, and the whole feature
     // fails silently to "the project knows nothing" — which is indistinguishable from the honest
     // empty case and is why this took a live drive to notice at all.
-    const body = (await res.json()) as { entries?: unknown } | undefined;
-    const entries = body?.entries;
-    if (!Array.isArray(entries)) return undefined;
+    const body: unknown = await res.json();
+    // The envelope is the check that works: the platform names the project on the RESPONSE and not
+    // on each entry, so the entry-level filter alone kept a whole sibling workspace while looking
+    // like it did something. `undefined` means the response could not be shown to be this project's
+    // — nothing is attached, because a verdict carrying another repo's "established knowledge" is
+    // worse than one carrying none. See `memory-scope.ts`.
+    const entries = scopedMemoryEntries(body, cloud.projectId);
+    if (entries === undefined) return undefined;
     const picked = selectConsulted(entries as { statement?: unknown; status?: unknown }[]);
     return 0 === picked.length ? undefined : picked;
   } catch {
@@ -498,7 +512,7 @@ export async function navigateAndAwait(
 async function loadInvokedFlows(
   deps: ToolDeps,
   flow: FlowFile,
-  projectId?: ProjectId,
+  target: ProjectTarget,
 ): Promise<Map<string, FlowFile>> {
   const out = new Map<string, FlowFile>();
   const queue: FlowFile[] = [flow];
@@ -510,7 +524,7 @@ async function loadInvokedFlows(
       const name = step.invoke;
       if (name === undefined || seen.has(name)) continue;
       seen.add(name);
-      const sub = await flowsForSession(deps, projectId).flows.load(name, projectId);
+      const sub = await flowsForSession(deps, target).flows.load(name, target.projectId);
       if (!sub.ok) continue;
       out.set(name, sub.value);
       queue.push(sub.value);
@@ -596,15 +610,11 @@ export async function replayNamedFlow(
   // Resolve within the connecting app's scope so a shared daemon replays THIS project's flow, not a
   // same-named flow from another app. Safe-resolve: a missing session degrades to the global store,
   // and the load-then-session order (unchanged) still surfaces a not-found before a no-session error.
-  let projectId: ProjectId | undefined;
-  try {
-    projectId = deps.sessions.resolve(asString(args['sessionId'])).projectId;
-  } catch {
-    projectId = undefined;
-  }
+  const target = safeSessionTarget(deps, asString(args['sessionId']));
+  const { projectId } = target;
   // The app's store, not the daemon's: this load answering `flow_not_found` for a flow plainly on
   // disk is what made replay unusable from a daemon started outside the project.
-  const loaded = await flowsForSession(deps, projectId).flows.load(name, projectId);
+  const loaded = await flowsForSession(deps, target).flows.load(name, projectId);
   if (!loaded.ok) {
     await recordReplayRun(
       deps,
@@ -662,7 +672,7 @@ export async function replayNamedFlow(
   // Loaded once and used for BOTH the replay and the grading below. A composite asserts through
   // what it runs, and a grader that cannot see the sub-flows reports `unverifiable` on a journey
   // that checks itself thoroughly — right about the file, wrong about the journey.
-  const invokedFlows = await loadInvokedFlows(deps, replayable, projectId);
+  const invokedFlows = await loadInvokedFlows(deps, replayable, target);
   /*
    * The flow's own preconditions, before a single step runs.
    *
@@ -737,7 +747,7 @@ export async function replayNamedFlow(
         // How an `invoke` step finds the flow it runs. Scoped to the same project as the flow being
         // replayed, so a composite cannot reach into another app's store for a same-named sub-journey.
         resolveFlow: async (invoked: string) => {
-          const sub = await flowsForSession(deps, projectId).flows.load(invoked, projectId);
+          const sub = await flowsForSession(deps, target).flows.load(invoked, projectId);
           return sub.ok ? await resolveFlowUploads(deps, sub.value) : undefined;
         },
         // Bug-sweep mode: keep going past a step whose action ran and whose consequence merely did
@@ -792,6 +802,8 @@ export async function replayNamedFlow(
     };
     steps.push(row);
   }
+  const staleTarget = staleTargetResult(name, steps);
+  if (staleTarget !== undefined) return staleTarget;
   const driftSteps = steps.filter((s) => s.drift !== undefined).length;
   const allOk = steps.every((s) => s.ok);
   const status = driftSteps > 0 ? ReplayStatus.DRIFT : allOk ? ReplayStatus.OK : ReplayStatus.ERROR;
@@ -838,8 +850,9 @@ export async function replayNamedFlow(
    * moment somebody needs to know what this feature is supposed to do and who established it. A
    * knowledge base you only see when everything is already fine is decoration.
    */
-  // No projectId argument: the API key is already bound to one project server-side, so passing a
-  // second opinion about which project this is would only create a way for the two to disagree.
+  // The scope comes from the link file, inside `consultProjectMemory`. It is NOT the API key's
+  // job: a key covers a whole workspace and a workspace holds more than one repo, so "bound to one
+  // project server-side" was an assumption that handed this replay another app's knowledge.
   const knows = await consultProjectMemory(deps, loaded.value, replayRoot);
   const failed = steps.find((step) => !step.ok && step.drift === undefined);
   if (failed !== undefined) {
@@ -924,33 +937,6 @@ export async function replayNamedFlow(
    * so a clean replay of a flow with nothing to learn does not rewrite a file for no reason.
    */
   return result;
-}
-
-/** A contradiction's identity for de-duplication: the rule that fired, and the evidence it fired on. */
-function contradictionId(found: Contradiction): string {
-  return `${found.kind}|${found.detail}`;
-}
-
-/**
- * The contradictions the whole-span pass found that no individual step could.
- *
- * A step's window closes when the step ends, so a request fired at step 2 and still unanswered at
- * step 5 is invisible to every per-step window: step 2's closed before the answer came and step 5
- * never saw it start. Re-running the detectors over the whole replay span finds those — and re-finds
- * everything the steps already reported, which is what the subtraction is for. Reporting a finding
- * twice teaches a reader that the count is noise.
- *
- * Exported for its own test: the subtraction is the whole rule, and it is pure.
- */
-/** Cross-step findings belong to no single step; -1 is the address the suite verdict already uses. */
-const CROSS_STEP_INDEX = -1;
-
-export function crossStepOnly(
-  whole: readonly Contradiction[],
-  steps: readonly FlowStepResult[],
-): Contradiction[] {
-  const seen = new Set(steps.flatMap((step) => (step.contradictions ?? []).map(contradictionId)));
-  return whole.filter((found) => !seen.has(contradictionId(found)));
 }
 
 /**

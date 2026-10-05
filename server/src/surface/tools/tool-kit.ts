@@ -87,7 +87,7 @@ export interface ToolDeps<Ext = unknown> {
    * embedding this engine may not have a filesystem to search. Absent ⇒ `reticleRoot`, which is
    * exactly today's behaviour.
    */
-  artifactRootFor?: (projectId: ProjectId | undefined) => ArtifactRoot;
+  artifactRootFor?: (projectId: ProjectId | undefined, origin?: string) => ArtifactRoot;
   /**
    * A verification run just landed — wake cloud sync instead of waiting for its next tick.
    *

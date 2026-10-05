@@ -254,6 +254,94 @@ describe('SessionManager.resolve() auto-selection', () => {
   });
 });
 
+describe('scope miss error messaging (#1369)', () => {
+  it('formats untagged sessions without quotes and names sessionId and projectId guidance', () => {
+    const mgr = new SessionManager();
+    const untagged = new Session(
+      { ...HELLO, sessionId: 's-untagged', projectId: undefined, url: 'http://localhost:3000' },
+      fakeSocket,
+      () => 0,
+    );
+    mgr.add(untagged);
+
+    let thrown: Error | undefined;
+    try {
+      mgr.resolve(undefined, { projectId: 'shop' });
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).toBeDefined();
+    const msg = thrown?.message ?? '';
+
+    // The placeholder must NOT be printed in quotes like "'untagged'"
+    expect(msg).not.toContain("'untagged'");
+    expect(msg).toContain("(no projectId: the page's connect() carries none)");
+
+    // "connected with no projectId" rather than "under a different project"
+    expect(msg).toContain('ARE connected with no projectId:');
+
+    // Names sessionId to target the page
+    expect(msg).toContain('Pass the sessionId above to target one');
+    expect(msg).toContain("sessionId 's-untagged'");
+
+    // Suggests adding projectId to connect() or .reticle.json
+    expect(msg).toContain("add a projectId to the app's connect() call or .reticle.json");
+  });
+
+  it('formats tagged sessions under different projects with quotes', () => {
+    const mgr = new SessionManager();
+    const tagged = new Session(
+      { ...HELLO, sessionId: 's-tagged', projectId: 'atlas', url: 'http://localhost:4310' },
+      fakeSocket,
+      () => 0,
+    );
+    mgr.add(tagged);
+
+    let thrown: Error | undefined;
+    try {
+      mgr.resolve(undefined, { projectId: 'shop' });
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).toBeDefined();
+    const msg = thrown?.message ?? '';
+    expect(msg).toContain("ARE connected under a different project: 'atlas'");
+    expect(msg).toContain('Pass the sessionId above to target one');
+    expect(msg).not.toContain("add a projectId to the app's connect()");
+  });
+
+  it('formats mixed sessions (both tagged and untagged) appropriately', () => {
+    const mgr = new SessionManager();
+    const untagged = new Session(
+      { ...HELLO, sessionId: 's-untagged', projectId: undefined, url: 'http://localhost:3000' },
+      fakeSocket,
+      () => 0,
+    );
+    const tagged = new Session(
+      { ...HELLO, sessionId: 's-tagged', projectId: 'atlas', url: 'http://localhost:4310' },
+      fakeSocket,
+      () => 0,
+    );
+    mgr.add(untagged);
+    mgr.add(tagged);
+
+    let thrown: Error | undefined;
+    try {
+      mgr.resolve(undefined, { projectId: 'shop' });
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).toBeDefined();
+    const msg = thrown?.message ?? '';
+    expect(msg).toContain('ARE connected under a different project or with no projectId:');
+    expect(msg).toContain("(no projectId: the page's connect() carries none)");
+    expect(msg).toContain("'atlas'");
+  });
+});
+
 /**
  * Tabs piled up — every `init` run opened another — and every tool called without a sessionId failed
  * with "multiple sessions connected". Healthy tabs heartbeat on the same cadence, so their recency

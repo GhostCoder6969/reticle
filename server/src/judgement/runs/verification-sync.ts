@@ -30,7 +30,7 @@ import { RunStore } from './artifact/run-store.js';
 import { cloudFetch, syncRunToCloud, SyncOutcome } from '@/memory/cloud/cloud-sync.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { log } from '@/log.js';
-import { rootForProjectId } from '@/memory/project/session-root.js';
+import { rootForTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /** The author of record when no MCP peer introduced itself — a CLI run, or a client that skipped the handshake. */
@@ -88,8 +88,9 @@ function assembleRun(
 export async function persistAndSyncVerificationRun(
   deps: ToolDeps,
   timed: TimedReplay[],
-  projectId: ProjectId | undefined,
+  target: ProjectTarget,
 ): Promise<string | undefined> {
+  const { projectId } = target;
   if (0 === timed.length) return undefined;
   let run: ReticleVerificationRun;
   // The project the suite ran for, not the directory the daemon was started in. Both halves below
@@ -97,7 +98,7 @@ export async function persistAndSyncVerificationRun(
   // decides WHICH DASHBOARD this run is pushed to. The daemon's own directory has no link file, so
   // a misrouted read silently meant "not attached" — and where it DID have one, the run was pushed
   // to a dashboard belonging to whoever that checkout was linked to.
-  const root = rootForProjectId(deps, projectId);
+  const root = rootForTarget(deps, target);
   try {
     run = assembleRun(deps, timed, projectId);
     await new RunStore(deps.fs, root).write(run);

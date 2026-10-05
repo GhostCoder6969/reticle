@@ -22,7 +22,12 @@ import { chromiumLaunchOptions, type ChromiumLaunchOptions } from './chromium-la
 import {
   bundledPlaywrightVersion,
   chromiumInstallCommand,
+  chromiumPathProblem,
+  configuredChromiumPath,
+  configuredChromiumProbe,
+  configuredChromiumRefusal,
   probeChromium,
+  type ChromiumPathProblem,
   type ChromiumProbe,
 } from './command/cli/doctor/browser/chromium-hint.js';
 
@@ -93,6 +98,8 @@ export interface ChromiumTargetDeps {
   /** Where the bundled playwright expects its Chromium build. */
   executablePath: () => string;
   exists: (path: string) => boolean;
+  /** What stops the executable RETICLE_CHROMIUM_PATH names from launching, if anything. */
+  pathProblem: (path: string) => ChromiumPathProblem | undefined;
   platform: NodeJS.Platform;
   env: NodeJS.ProcessEnv;
   /** Run the pinned Chromium install; resolves true when it succeeded. */
@@ -101,8 +108,14 @@ export interface ChromiumTargetDeps {
   announce: (line: string) => void;
 }
 
-/** Which browser to launch: the bundled build (no channel), an installed channel, or none at all. */
-export type ChromiumTarget = { found: true; channel?: ChromiumChannel } | { found: false };
+/**
+ * Which browser to launch: the bundled build (no channel), an installed channel, the executable
+ * RETICLE_CHROMIUM_PATH names, or none at all. `unusableConfigured` is a named executable that
+ * cannot be launched, and why.
+ */
+export type ChromiumTarget =
+  | { found: true; channel?: ChromiumChannel; executablePath?: string }
+  | { found: false; unusableConfigured?: { path: string; problem: ChromiumPathProblem } };
 
 const usingChannelLine = (channel: ChromiumChannel): string =>
   `[reticle] Playwright's Chromium is not installed; using the installed ${CHANNEL_LABEL[channel]} instead.\n`;
@@ -114,9 +127,20 @@ const INSTALL_FAILED_LINE = '[reticle] The Chromium install did not complete.\n'
 
 /**
  * Decide which browser a launch will use, installing the pinned Chromium only as the last resort.
- * Order: bundled build on disk → installed Chrome → installed Edge → install, then bundled.
+ * Order: RETICLE_CHROMIUM_PATH → bundled build on disk → installed Chrome → installed Edge →
+ * install, then bundled.
+ *
+ * A named executable ends the search either way. It is set on a machine where the usual places are
+ * empty or unusable, so falling back from a typo to a download would only hide the typo.
  */
 export async function resolveChromiumTarget(deps: ChromiumTargetDeps): Promise<ChromiumTarget> {
+  const configured = configuredChromiumPath(deps.env);
+  if (configured !== undefined) {
+    const problem = deps.pathProblem(configured);
+    return problem === undefined
+      ? { found: true, executablePath: configured }
+      : { found: false, unusableConfigured: { path: configured, problem } };
+  }
   let bundled: string;
   try {
     bundled = deps.executablePath();
@@ -216,6 +240,7 @@ function defaultDeps(chromium: { executablePath: () => string }): ChromiumTarget
   return {
     executablePath: () => chromium.executablePath(),
     exists: existsSync,
+    pathProblem: (path) => chromiumPathProblem(path, process.platform),
     platform: process.platform,
     env: process.env,
     install: installPinnedChromium,
@@ -234,16 +259,40 @@ export async function launchChromium<B>(
   deps: ChromiumTargetDeps = defaultDeps(chromium),
 ): Promise<B> {
   const target = await resolveChromiumTarget(deps);
-  const channel = target.found ? target.channel : undefined;
-  return chromium.launch(chromiumLaunchOptions(headless, channel));
+  // Refused here rather than launched: Playwright's error for a missing executable is the one
+  // `chromiumLaunchHint` answers with the install command, which cannot fix a wrong path.
+  if (!target.found && target.unusableConfigured !== undefined) {
+    const { path, problem } = target.unusableConfigured;
+    throw new Error(configuredChromiumRefusal(path, problem));
+  }
+  return target.found
+    ? chromium.launch(chromiumLaunchOptions(headless, target.channel, target.executablePath))
+    : chromium.launch(chromiumLaunchOptions(headless));
 }
+
+/** What the probes read off the machine, injected so a test can name a browser that is not there. */
+interface ProbeMachine {
+  env: NodeJS.ProcessEnv;
+  exists: (path: string) => boolean;
+  pathProblem: (path: string) => ChromiumPathProblem | undefined;
+}
+
+const THIS_MACHINE: ProbeMachine = {
+  env: process.env,
+  exists: existsSync,
+  pathProblem: (path) => chromiumPathProblem(path, process.platform),
+};
 
 /**
  * The lease preflight's probe: "can a launch succeed?", which now includes the Chrome/Edge fallback
  * and the automatic install. Without this the preflight would refuse a lease on a machine the
  * launcher itself could serve. Falls back to the plain probe so a real refusal keeps its evidence.
  */
-export async function probeLaunchableChromium(): Promise<ChromiumProbe> {
+export async function probeLaunchableChromium(
+  machine: ProbeMachine = THIS_MACHINE,
+): Promise<ChromiumProbe> {
+  const configured = configuredChromiumProbe(machine.env, machine.pathProblem);
+  if (configured !== undefined) return configured;
   try {
     const { chromium } = await import('playwright');
     const target = await resolveChromiumTarget(defaultDeps(chromium));
@@ -258,13 +307,17 @@ export async function probeLaunchableChromium(): Promise<ChromiumProbe> {
  * `doctor`'s probe: the plain Chromium probe, plus the installed browser that stands in when the
  * bundled build is missing. Never installs — a diagnostic that downloads 150 MiB is not one.
  */
-export async function probeChromiumWithFallback(): Promise<ChromiumProbe> {
+export async function probeChromiumWithFallback(
+  machine: ProbeMachine = THIS_MACHINE,
+): Promise<ChromiumProbe> {
+  const configured = configuredChromiumProbe(machine.env, machine.pathProblem);
+  if (configured !== undefined) return configured;
   const probe = await probeChromium();
   if (probe.exists) return probe;
   const channel = findInstalledChannel({
-    exists: existsSync,
+    exists: machine.exists,
     platform: process.platform,
-    env: process.env,
+    env: machine.env,
   });
   return channel === undefined ? probe : { ...probe, fallback: CHANNEL_LABEL[channel] };
 }

@@ -62,21 +62,36 @@ function scopeSessions(sessions: Session[], scope?: ResolveScope): Session[] {
  * reader goes looking at their app instead of at the scope. Name what IS connected and how to
  * target it: both facts are already in hand here.
  */
-function scopeMissError(connected: Session[], scope?: ResolveScope): string {
+export function scopeMissError(connected: Session[], scope?: ResolveScope): string {
   const who =
     scope?.projectId !== undefined
       ? `project '${scope.projectId}'`
       : scope?.url !== undefined
         ? `your app at ${scope.url}`
         : 'the active project';
+  const anyUntagged = connected.some((s) => s.projectId === undefined);
+  const anyTagged = connected.some((s) => s.projectId !== undefined);
+  const how =
+    anyUntagged && !anyTagged
+      ? 'with no projectId'
+      : anyUntagged && anyTagged
+        ? 'under a different project or with no projectId'
+        : 'under a different project';
   const listed = connected
-    .map((s) => `'${s.projectId ?? 'untagged'}' (${s.url}, sessionId '${s.id}')`)
+    .map((s) =>
+      s.projectId !== undefined
+        ? `'${s.projectId}' (${s.url}, sessionId '${s.id}')`
+        : `(no projectId: the page's connect() carries none) (${s.url}, sessionId '${s.id}')`,
+    )
     .join(', ');
+  const advice = anyUntagged
+    ? `Pass the sessionId above to target one, add a projectId to the app's connect() call or ` +
+      `.reticle.json, or restart the daemon from that app's directory.`
+    : `Pass the sessionId above to target one, or restart the daemon from that app's directory.`;
   return (
-    `no browser session for ${who}, but ${String(connected.length)} session(s) ARE connected under a ` +
-    `different project: ${listed}. The daemon scopes to the .reticle.json of the directory it was ` +
-    `started in, so this is a scope mismatch, not a dead app. Pass the sessionId above to target one, ` +
-    `or restart the daemon from that app's directory.`
+    `no browser session for ${who}, but ${String(connected.length)} session(s) ARE connected ${how}: ` +
+    `${listed}. The daemon scopes to the .reticle.json of the directory it was started in, so ` +
+    `this is a scope mismatch, not a dead app. ${advice}`
   );
 }
 

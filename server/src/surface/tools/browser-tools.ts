@@ -111,6 +111,10 @@ export const BROWSER_TOOLS: ToolDef[] = [
       // which reads whatever is at the target afterwards, cannot tell the two apart on its own.
       const target = absoluteTarget(url, session.url);
       const priorIds = idsAtTarget(deps.sessions, target);
+      // The document the tab is on NOW. Sampled before dispatch because the replacement can
+      // connect while the NAVIGATE reply is still pending, and reading it after the await would
+      // record the replacement as the starting document (#1320).
+      const navigatedFromDocumentId = session.currentDocumentId;
       session.beginAction(ReticleTool.NAVIGATE, { url });
       // Same floor as the reload path above, for the same reason: going to a new URL replaces the
       // document just as thoroughly. `beginAction` attributes events to this action; it does not move
@@ -136,9 +140,12 @@ export const BROWSER_TOOLS: ToolDef[] = [
                 target,
                 {
                   // Keep the original Session object and URL so arrival detection can distinguish
-                  // an in-progress navigation from a document that arrived somewhere else.
+                  // an in-progress navigation from a document that arrived somewhere else. The
+                  // document identity lets a same-URL navigation wait for its replacement instead
+                  // of confirming the document it is about to destroy (#1320).
                   navigatedSession: session,
                   navigatedFrom: session.url,
+                  ...(navigatedFromDocumentId === undefined ? {} : { navigatedFromDocumentId }),
                   priorIds,
                 },
                 timeoutMs,

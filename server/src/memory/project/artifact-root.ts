@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import {
   SAFE_SEGMENT_PATTERN,
   ReticleDir,
@@ -55,6 +55,13 @@ interface ArtifactRootQuery {
   candidates: readonly ProjectCandidate[];
   /** Where artifacts go when the project cannot be identified. Already a `.reticle` path. */
   daemonRoot: string;
+  /**
+   * The directory the dev server that served this page runs in, when the caller could observe it.
+   * Only consulted to break an AMBIGUOUS tie: every git worktree carries the same committed
+   * `.reticle.json`, so the projectId cannot tell them apart, but the serving process runs inside
+   * exactly one of them.
+   */
+  servingDirectory?: string | undefined;
 }
 
 export interface ArtifactRoot {
@@ -88,6 +95,10 @@ export function resolveArtifactRoot(query: ArtifactRootQuery): ArtifactRoot {
   }
 
   if (matches.length > 1) {
+    const served = checkoutContaining(matches, query.servingDirectory);
+    if (served !== undefined) {
+      return { root: join(served, ReticleDir.ROOT), reason: ArtifactRootReason.MATCHED_PROJECT };
+    }
     return {
       root: daemonRoot,
       reason: ArtifactRootReason.AMBIGUOUS,
@@ -104,6 +115,27 @@ export function resolveArtifactRoot(query: ArtifactRootQuery): ArtifactRoot {
   }
 
   return { root: join(directory, ReticleDir.ROOT), reason: ArtifactRootReason.MATCHED_PROJECT };
+}
+
+/**
+ * The checkout the serving directory sits in, or undefined when it is in none of them.
+ *
+ * Deepest wins, because a worktree can live INSIDE the primary checkout (`.claude/worktrees/x`) and
+ * then sits under both; the deeper one is the one the server actually runs in. `relative` rather
+ * than a string prefix, so `/wt/pr-77` is not read as inside `/wt/pr-7`, and on every platform.
+ */
+function checkoutContaining(
+  matches: readonly ProjectCandidate[],
+  servingDirectory: string | undefined,
+): string | undefined {
+  if (servingDirectory === undefined || 0 === servingDirectory.length) return undefined;
+  const inside = matches
+    .map((candidate) => candidate.directory)
+    .filter((directory) => {
+      const rel = relative(directory, servingDirectory);
+      return '' === rel || ('..' !== rel && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+    });
+  return inside.sort((a, b) => b.length - a.length)[0];
 }
 
 /**
@@ -194,20 +226,47 @@ const ORIGIN_BUCKET_PREFIX = 'origin-';
  * Two cases, and only one of them was ever the intended behaviour:
  *
  *   - the daemon is sitting IN a Reticle project (a developer who ran `reticle serve` in their own
- *     app). Its root is the right answer, and it is the case the old fallback was written for.
- *   - the daemon is a guest — no `.reticle.json`, no `.reticle/` already there. Then the evidence
- *     goes to the user's own `~/.reticle/unmatched/<projectId>`, which is Reticle's to write.
+ *     app), and the session is asking about THAT project. Its root is the right answer, and it is
+ *     the case the old fallback was written for.
+ *   - otherwise — a guest in the tree, or a daemon in its own checkout serving a DIFFERENT project.
+ *     Then the evidence goes to the user's own `~/.reticle/unmatched/<projectId>`, which is
+ *     Reticle's to write.
  *
  * It is never dropped. A verdict with nowhere to live is a worse failure than one in an unexpected
  * place, and the caller says out loud where it went.
  *
+ * ## The second case in that list used to be missing, and it is not an edge case
+ *
+ * `daemonIsProject` answers "is the daemon sitting in SOME Reticle project". The guard below read it
+ * as "this session's project", and those are different questions whenever the two ids differ. Run
+ * the daemon in repo A, then connect an app from a git worktree B of that same repo: B has its own
+ * `projectId` in its own `.reticle.json`, and discovery cannot see it — it walks out from A's
+ * `process.cwd()` and never crosses into a sibling checkout — so this function is reached with a
+ * NAMED project and the daemon's root came back anyway. B's intents, flows and runs were written
+ * into A's checkout, and the returned path said A, so nothing looked wrong.
+ *
+ * A real identity always wins. The daemon's root is only the answer when it is that identity's own
+ * root, or when no identity was named at all.
+ *
  * `projectId` arrives in HELLO from the page, so it is untrusted input on a path join and is held
- * to one safe segment — the same guard session ids and flow names already pass.
+ * to one safe segment — the same guard session ids and flow names already pass. `daemonProjectId`
+ * is read from the daemon's own `.reticle.json` and gets the same treatment, because equality
+ * against a guarded value is only as strong as the weaker side.
  */
 export function unmatchedRoot(query: {
   daemonRoot: string;
   /** Whether the daemon's own directory is a Reticle project — an IO question, answered by the caller. */
   daemonIsProject: boolean;
+  /**
+   * The daemon's OWN projectId, when its directory declares one. Absent means the daemon cannot
+   * prove which project it belongs to, so a named project that is not demonstrably its own declines.
+   *
+   * A plain `string` rather than a `ProjectId`, because it arrives from a `ProjectCandidate` — the
+   * registry's view of a `.reticle.json` — and the brand is only minted where the id is read out of
+   * that file for this daemon. Comparing it against a branded session id is unaffected: the brand is
+   * a `string`, and the guard below is what actually holds it to one safe path segment.
+   */
+  daemonProjectId?: string | undefined;
   /** The user's home directory. Passed in rather than read, so this stays pure. */
   home: string;
   projectId?: ProjectId | undefined;
@@ -217,7 +276,8 @@ export function unmatchedRoot(query: {
    */
   origin?: string | undefined;
 }): string {
-  if (query.daemonIsProject) return query.daemonRoot;
+  if (query.daemonIsProject && isTheDaemonsOwnProject(query.daemonProjectId, query.projectId))
+    return query.daemonRoot;
   const id = query.projectId ?? '';
   const named = SAFE_SEGMENT_PATTERN.test(id) && !id.includes('..');
   return join(
@@ -225,6 +285,40 @@ export function unmatchedRoot(query: {
     ReticleDir.ROOT,
     UNMATCHED_SUBDIR,
     named ? id : unnamedSegment(query.origin),
+  );
+}
+
+/**
+ * May the daemon write this session's artifacts into its own `.reticle/`?
+ *
+ * Two ways to qualify, and the difference between them is the whole bug: belonging to the directory
+ * is not the same as owning it.
+ *
+ *   - Nobody named a project (a pre-2.0 SDK sends no projectId). There is no identity to disagree
+ *     with, and the daemon's own root is the only thing on offer.
+ *   - The named project IS the daemon's own, and the daemon can prove it — `.reticle.json` sits in
+ *     its directory and declares the same id. Both sides go through the same segment guard, because
+ *     an equality between a guarded value and an unguarded one is only as strong as the loose side.
+ *
+ * A NAMED project the daemon cannot match declines, including when it has a `.reticle/` but no
+ * readable id. Declining costs the session its home directory and buys the guarantee that one
+ * checkout never receives another's ledger; the alternative is a wrong answer that reports success.
+ *
+ * The two ids are REQUIRED parameters rather than one object, and that is load-bearing. Taking a
+ * partial object let a caller omit a field and still compile — and an omitted `projectId` reads as
+ * "nobody named a project", which answers `true` and puts the session straight back into the daemon's
+ * checkout. That is the original defect, reachable by a typo rather than by a decision.
+ */
+function isTheDaemonsOwnProject(
+  daemonProjectId: string | undefined,
+  projectId: ProjectId | undefined,
+): boolean {
+  if (projectId === undefined || 0 === projectId.length) return true;
+  if (daemonProjectId === undefined || 0 === daemonProjectId.length) return false;
+  return (
+    daemonProjectId === projectId &&
+    SAFE_SEGMENT_PATTERN.test(daemonProjectId) &&
+    !daemonProjectId.includes('..')
   );
 }
 

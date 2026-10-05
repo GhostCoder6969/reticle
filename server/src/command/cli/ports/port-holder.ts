@@ -140,3 +140,31 @@ export function findPortHolder(
   const out = exec('lsof', ['-nP', `-iTCP:${String(port)}`, '-sTCP:LISTEN', '-F', 'pc']);
   return null === out ? null : parsePortHolder(out);
 }
+
+/** `lsof -Fn` emits the file name on its own line, prefixed `n`. */
+const NAME_FIELD = 'n';
+
+/** The path in `lsof -a -p <pid> -d cwd -Fn` output, or null when it printed none. */
+export function parseProcessCwd(stdout: string): string | null {
+  for (const raw of stdout.split('\n')) {
+    if (raw.startsWith(NAME_FIELD) && raw.length > NAME_FIELD.length) return raw.slice(1);
+  }
+  return null;
+}
+
+/**
+ * The working directory of whatever LISTENS on `port`, or null.
+ *
+ * How the daemon tells which checkout served a page when every git worktree declares the same
+ * projectId: the dev server runs inside exactly one of them. Null wherever `lsof` cannot answer —
+ * Windows, a slim container — and the caller then keeps the answer it had without this.
+ */
+export function findListenerCwd(
+  port: number,
+  exec: (command: string, args: readonly string[]) => string | null,
+): string | null {
+  const holder = findPortHolder(port, exec);
+  if (null === holder) return null;
+  const out = exec('lsof', ['-a', '-p', String(holder.pid), '-d', 'cwd', '-Fn']);
+  return null === out ? null : parseProcessCwd(out);
+}

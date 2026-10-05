@@ -6,7 +6,7 @@ import { runDemoTour } from './cli/demo/demo-run.js';
 
 import { renderTutorial } from './cli/tutorial.js';
 import { pathToFileURL } from 'node:url';
-import { openFailureNote } from './cli/answers/open-note.js';
+import { openFailureNote, openLaunchFailureNote } from './cli/answers/open-note.js';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { installCrashGuard } from './setup/setup-command.js';
@@ -504,10 +504,10 @@ function handleOpen(requestedPort: number, url: string | undefined): void {
           // Points at the OS handler, not at `reticle doctor`. Doctor's browser check is about
           // Reticle's own Chromium, which this command never touches — the same misdirect the
           // no-session note below spells out at length, left standing here for one more release.
-          recovery:
-            'Nothing was opened. This command asks the OS to open a url in your default browser ' +
-            `(\`${openCommand(decision.url, process.platform).cmd}\` on this platform) and that ` +
-            'failed, so the fix is on the OS side: open the url yourself, or set a default browser.',
+          recovery: openLaunchFailureNote(
+            decision.url,
+            openCommand(decision.url, process.platform).cmd,
+          ),
         });
         process.exit(1);
         return;
@@ -855,7 +855,7 @@ export function main(): void {
       handleOpen(parsed.port, parsed.url);
       break;
     case 'drive':
-      handleDrive(parsed);
+      handleDrive(parsed, readProjectId(process.cwd()));
       break;
     case 'verify':
       handleVerify(parsed);

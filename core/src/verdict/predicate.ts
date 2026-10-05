@@ -187,19 +187,16 @@ const KIND_SPELLING = 'type';
  * something writes the same words again when it asserts on it — and got `query: Required` plus an
  * `unknown field` list for its trouble. Lifting them is unambiguous: they have no other meaning on
  * this kind.
+ *
+ * Derived from the schema rather than listed beside it. The hand-written list this replaces had
+ * already fallen four fields behind `ElementQuerySchema` — `scope`, `self`, `attrs` and `source` —
+ * so a flat `scope` was refused as an unknown key on the predicate while `reticle_look` accepts it
+ * at the top level, and the agent that had just scoped a search wrote the word it had been taught.
+ * A list beside a schema is a list that drifts; a list read FROM the schema cannot.
  */
-const ELEMENT_QUERY_FIELDS = [
-  'by',
-  'value',
-  'role',
-  'name',
-  'text',
-  'label',
-  'placeholder',
-  'testid',
-  'alt',
-  'component',
-] as const;
+export const ELEMENT_QUERY_FIELDS: readonly (keyof ElementQuery)[] = Object.keys(
+  ElementQuerySchema.shape,
+) as (keyof ElementQuery)[];
 
 /** `type` read as the discriminator when — and only when — `kind` is absent. */
 function renameKindSpelling(obj: Record<string, unknown>): Record<string, unknown> {

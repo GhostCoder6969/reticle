@@ -16,7 +16,8 @@ import { MutationOutcome } from 'open-verification';
 import { z } from 'zod';
 import { sessionMutationPort } from '@/surface/tools/lease-tools.js';
 import { mutationTest } from './mutation-run.js';
-import { replayNamedFlow, sessionProjectId } from './flow-replay-run.js';
+import { replayNamedFlow } from './flow-replay-run.js';
+import { sessionTarget } from '@/memory/project/session-root.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { ReplayStatus } from '@reticlehq/core';
@@ -56,8 +57,9 @@ export const FLOW_MUTATE_TOOL: ToolDef = {
   handler: async (deps: ToolDeps, args): Promise<Record<string, unknown>> => {
     const name = asString(args['flowName']) ?? asString(args['flow']) ?? '';
     const sessionId = asString(args['sessionId']);
-    const projectId = sessionProjectId(deps, sessionId);
-    const loaded = await flowsForSession(deps, projectId).flows.load(name, projectId);
+    const project = sessionTarget(deps, sessionId);
+    const { projectId } = project;
+    const loaded = await flowsForSession(deps, project).flows.load(name, projectId);
     if (!loaded.ok) {
       return { flow: name, because: `could not load "${name}": ${String(loaded.code)}` };
     }

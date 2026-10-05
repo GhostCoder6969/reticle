@@ -76,3 +76,23 @@ describe("init's closing advice only asks for a restart when one is actually nee
     }
   });
 });
+
+describe('the closing advice does not outrun the registration rows above it', () => {
+  it('names a client whose step is still manual rather than saying the tools are available now', () => {
+    const hint = restartHint(StepStatus.ALREADY, undefined, ['MCP server (Codex CLI)']);
+    expect(hint).toContain('MCP server (Codex CLI)');
+    expect(hint).not.toContain('the tools are available now');
+    expect(hint).not.toContain('restart your agent');
+  });
+
+  it('does not claim nothing is waiting on a human when a client still needs a hand edit', () => {
+    const hint = restartHint(StepStatus.ALREADY, undefined, ['MCP server (Codex CLI)']);
+    expect(hint).not.toContain('nothing here is waiting on a human');
+    expect(hint).toMatch(/hand-edit step above still needs a human/i);
+  });
+
+  it('is unchanged when no other client is left to register', () => {
+    expect(restartHint(StepStatus.ALREADY, undefined, [])).toBe(restartHint(StepStatus.ALREADY));
+    expect(restartHint(StepStatus.ALREADY)).toContain('the tools are available now');
+  });
+});

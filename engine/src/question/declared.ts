@@ -157,10 +157,10 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
  * verdict (measured: a 201 plus the unique row, unread body, agent went to enable capture instead
  * of finishing the drive).
  *
- * Same conservatism as `declaredExpectations`: only the top level and `allOf`. An `anyOf` branch
- * may never have held, and honouring it would skip the unread caveat on the strength of a net
- * success that was the branch that actually matched. An `absent` element is not a consequence the
- * body cannot own.
+ * Same conservatism as `declaredExpectations`: only the top level and `allOf`, plus an `anyOf` whose
+ * every branch is body-independent. An `anyOf` with a net branch may have held on that branch alone,
+ * so it must not skip the unread caveat. An `absent` element is not a consequence the body cannot
+ * own.
  */
 export function declaresBodyIndependentChannel(predicate: Predicate | undefined): boolean {
   if (predicate === undefined) return false;
@@ -169,6 +169,8 @@ export function declaresBodyIndependentChannel(predicate: Predicate | undefined)
     switch (p.kind) {
       case PredicateKind.ALL_OF:
         return p.predicates.some(walk);
+      case PredicateKind.ANY_OF:
+        return p.predicates.every(walk);
       case PredicateKind.TEXT:
         return true !== p.absent;
       case PredicateKind.SIGNAL:

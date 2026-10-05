@@ -7,6 +7,15 @@
  *
  * It lives here rather than in the daemon bootstrap because it is a subject, not wiring — and
  * because the bootstrap is at its line cap, which is the cohesion signal that rule doing its job.
+ *
+ * ## Why `artifactRootResolver` takes a `deps`
+ *
+ * Both of its IO answers come from the REAL disk and the REAL `process.cwd()`: which projects this
+ * machine knows, and whether the daemon's own directory declares one. That left the file untestable
+ * at the level where its defect actually lives — the `unmatchedRoot` specs next door hand a
+ * `daemonProjectId` straight in, so a mistake in READING it would leave every one of them green
+ * while the worktree bug reproduced unchanged. The defaults are the production answers; the seam is
+ * what lets a test say "these are the projects on this machine" without one.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -54,6 +63,29 @@ function daemonSitsInAProject(daemonRoot: string): boolean {
     // Unreadable is not a licence to write. Treat it as somebody else's directory.
     return false;
   }
+}
+
+/**
+ * The project a candidate list says lives at the daemon's own directory.
+ *
+ * Not the same question as `daemonSitsInAProject`: that one asks whether the tree invited Reticle in
+ * at all (either mark counts, including a bare `.reticle/` from a version that predates the config
+ * file), and this one asks WHICH project it is. The difference is the whole of #1244 — a daemon in
+ * repo A serving an app from a git worktree B belongs to A and is being asked about B.
+ *
+ * Takes the candidates rather than gathering them, so the answer is a function of one list and a test
+ * can supply it. Read from that same list the resolver already builds, so there is one answer to
+ * "where does this project live" rather than a second `.reticle.json` parser here. A daemon whose
+ * root was passed explicitly (`--root`, or an embedder's own `reticleRoot`) is not in that list and
+ * answers undefined, which is the safe direction: it cannot prove the named project is its own, so it
+ * declines the daemon root and the session goes to the unmatched bucket instead.
+ */
+function daemonOwnProjectId(
+  daemonRoot: string,
+  candidates: readonly ProjectCandidate[],
+): string | undefined {
+  const directory = dirname(daemonRoot);
+  return candidates.find((candidate) => candidate.directory === directory)?.projectId;
 }
 
 /**
@@ -131,16 +163,49 @@ export function projectDirectoryFor(projectId: string | undefined): string | und
   return 1 === directories.size ? [...directories][0] : undefined;
 }
 
+/** Where this resolver gets its IO answers. The defaults are the production ones. */
+export interface ArtifactRootResolverDeps {
+  /** Every project this machine knows about. Defaults to discovery + the user registry. */
+  candidates?: () => ProjectCandidate[];
+  /** Whether the daemon's own directory is a Reticle project. Defaults to looking at disk. */
+  daemonIsProject?: (daemonRoot: string) => boolean;
+  /**
+   * The directory of the dev server that served a page origin, or undefined when unobservable.
+   * Required, not defaulted: the production answer reads daemon state and shells out, which is the
+   * wiring layer's business (`portal/session/serving-directory.ts`), and a resolver built without it
+   * would silently keep sending every worktree's artifacts to the primary checkout.
+   */
+  servingDirectory: (origin: string) => string | undefined;
+}
+
 export function artifactRootResolver(
   daemonRoot: string,
+  deps: ArtifactRootResolverDeps,
 ): (projectId: ProjectId | undefined, origin?: string) => ArtifactRoot {
-  const daemonIsProject = daemonSitsInAProject(daemonRoot);
+  const candidates = deps.candidates ?? knownProjectCandidates;
+  const sitsInAProject = deps.daemonIsProject ?? daemonSitsInAProject;
+  const { servingDirectory } = deps;
+  const daemonIsProject = sitsInAProject(daemonRoot);
+  // Resolved beside it and ONCE, for the same reason: a directory's `.reticle.json` does not change
+  // between two tabs connecting. Only read when the daemon really is in a project, since it is the
+  // sole thing that can license a write into the daemon's own tree.
+  const daemonProjectId = daemonIsProject
+    ? daemonOwnProjectId(daemonRoot, candidates())
+    : undefined;
   return (projectId, origin) => {
-    const resolved = resolveArtifactRoot({
-      projectId,
-      candidates: knownProjectCandidates(),
-      daemonRoot,
-    });
+    const known = candidates();
+    let resolved = resolveArtifactRoot({ projectId, candidates: known, daemonRoot });
+    // Several checkouts declare this project — every git worktree carries the same committed
+    // `.reticle.json`. Only now is the serving process looked up: it shells out, and the tie is the
+    // one case where where the page was SERVED from is the deciding fact.
+    if (resolved.reason === ArtifactRootReason.AMBIGUOUS && origin !== undefined) {
+      resolved = resolveArtifactRoot({
+        projectId,
+        candidates: known,
+        daemonRoot,
+        servingDirectory: servingDirectory(origin),
+      });
+    }
     if (resolved.reason === ArtifactRootReason.MATCHED_PROJECT) return resolved;
     // Could not name the project. The old code wrote into the daemon's directory anyway and said
     // nothing, which put `.reticle/` — journals included — into repositories nobody had
@@ -151,6 +216,7 @@ export function artifactRootResolver(
       daemonRoot,
       daemonIsProject,
       home: homedir(),
+      ...(daemonProjectId === undefined ? {} : { daemonProjectId }),
       ...(projectId === undefined ? {} : { projectId }),
       // Only reached when no project id survives the guard. Without it every app that never
       // stamped one shares a single directory -- and that directory holds the durable half, so one
@@ -160,6 +226,9 @@ export function artifactRootResolver(
     if (root !== daemonRoot) {
       log('artifact_root_unmatched', {
         projectId: projectId ?? null,
+        // The other half of the comparison, so a reader can tell "the daemon was a guest" from
+        // "the daemon is in a DIFFERENT project" without reading the config files by hand.
+        daemonProjectId: daemonProjectId ?? null,
         reason: resolved.reason,
         root,
       });

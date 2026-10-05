@@ -174,6 +174,19 @@ jobs:
           # ~235KB of room over the measurement, matching the shape of the previous raise rather
           # than clearing today's number by a hair. The docs remain the first place to look.
           #
+          # RAISED to 6,400,000 on 2026-10-05. main measured 6,197,543 -- 2.4KB under the old
+          # ceiling -- against 6,017,969 at the previous raise (bfa6320ba), packed both ways:
+          #
+          #     code  3,767K -> 3,886K   (+119K)
+          #     types 1,352K -> 1,392K   (+40K)
+          #     docs    886K ->   907K   (+21K)
+          #
+          # No single change: 57 commits of fixes across v3.4.0 and v3.5.0 (one-command connect,
+          # run sync, real key presses, replay re-resolution, lease and navigate fixes). With 2.4KB
+          # left, contributors had started deleting code comments -- including safety rationale --
+          # to squeeze under the line, which is the wrong trade: a comment costs bytes nobody runs.
+          # ~200KB of room, the same shape as the raises below.
+          #
           # RAISED to 6,200,000 on 2026-09-30 for #1202: this branch on main measured 6,017,969,
           # 68KB over. That is the exhaustive crawl, the app-wide coverage ledger with code
           # coverage from the driven browser, `act_and_wait { durable }` and `reticle gate
@@ -190,7 +203,7 @@ jobs:
           # replayable run fields. ~196KB of room, the same shape as the two raises above.
           server_bytes=$(cd server && npm pack --dry-run --json 2>/dev/null | sed -n '/^\[/,$p' | node -e "process.stdin.resume();let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d)[0].unpackedSize))")
           echo "server unpacked: $server_bytes bytes"
-          if [ "$server_bytes" -gt 6200000 ]; then
-            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 6200KB budget"
+          if [ "$server_bytes" -gt 6400000 ]; then
+            echo "::error::@reticlehq/server unpacked size $server_bytes exceeds the 6400KB budget"
             exit 1
           fi

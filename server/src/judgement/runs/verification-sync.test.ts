@@ -56,11 +56,9 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
   it('writes the run artifact to disk even when not logged in (no phone-home)', async () => {
     const { calls } = stubFetch('ok');
 
-    const runId = await persistAndSyncVerificationRun(
-      deps,
-      [timed('checkout', ReplayStatus.OK)],
-      asProjectId('shop'),
-    );
+    const runId = await persistAndSyncVerificationRun(deps, [timed('checkout', ReplayStatus.OK)], {
+      projectId: asProjectId('shop'),
+    });
 
     expect(runId).toBeDefined();
     expect(calls).toHaveLength(0); // no creds → nothing leaves the machine
@@ -76,7 +74,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     const runId = await persistAndSyncVerificationRun(
       deps,
       [timed('checkout', ReplayStatus.OK), timed('signup', ReplayStatus.DRIFT)],
-      asProjectId('shop'),
+      { projectId: asProjectId('shop') },
     );
 
     expect(calls).toHaveLength(1);
@@ -102,16 +100,14 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     process.env[KEY_ENV] = 'rk_live_abc';
     stubFetch('throw');
 
-    const runId = await persistAndSyncVerificationRun(
-      deps,
-      [timed('checkout', ReplayStatus.OK)],
-      asProjectId('shop'),
-    );
+    const runId = await persistAndSyncVerificationRun(deps, [timed('checkout', ReplayStatus.OK)], {
+      projectId: asProjectId('shop'),
+    });
     expect(runId).toBeDefined(); // swallowed; local artifact still written
   });
 
   it('is a no-op for an empty suite (nothing to verify)', async () => {
-    const runId = await persistAndSyncVerificationRun(deps, [], asProjectId('shop'));
+    const runId = await persistAndSyncVerificationRun(deps, [], { projectId: asProjectId('shop') });
     expect(runId).toBeUndefined();
   });
 });

@@ -171,7 +171,7 @@ describe('a declared denial on screen is a declared auth failure', () => {
  * a string on screen, a store path, a signal, a route, or an element located by role / name /
  * testid — and that holding — is a channel the body does not own, so the unread clause must be
  * able to see it. Conservative about what counts, same as the rest of this file: only the top
- * level and `allOf`. An `anyOf` branch may never have held.
+ * level and `allOf`, plus `anyOf` when every branch is body-independent.
  */
 describe('a declared channel independent of the response body', () => {
   it('reads an exact string', () => {
@@ -222,7 +222,7 @@ describe('a declared channel independent of the response body', () => {
     ).toBe(false);
   });
 
-  it('ignores an anyOf branch — nothing in it is guaranteed to have held', () => {
+  it('does not read an anyOf with a net branch — that branch could have held alone', () => {
     expect(
       declaresBodyIndependentChannel({
         kind: PredicateKind.ANY_OF,
@@ -232,6 +232,18 @@ describe('a declared channel independent of the response body', () => {
         ],
       }),
     ).toBe(false);
+  });
+
+  it('reads an anyOf when every branch is body-independent', () => {
+    expect(
+      declaresBodyIndependentChannel({
+        kind: PredicateKind.ANY_OF,
+        predicates: [
+          { kind: PredicateKind.ROUTE, contains: '#dashboard' },
+          { kind: PredicateKind.ELEMENT, query: { testid: 'account-menu' } },
+        ],
+      }),
+    ).toBe(true);
   });
 
   it('reads a route the caller named before the action', () => {

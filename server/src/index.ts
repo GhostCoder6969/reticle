@@ -16,6 +16,7 @@ import {
   artifactRootResolver,
   projectDirectoryFor,
 } from './memory/project/artifact-root-resolver.js';
+import { servingDirectoryOf } from './portal/session/serving-directory.js';
 import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -61,6 +62,7 @@ import { createRunnerPort } from './judgement/runs/runner-port.js';
 import { RunStore } from './judgement/runs/artifact/run-store.js';
 import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
+import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
@@ -83,12 +85,9 @@ import { playwrightLauncher, resolveMaxContexts } from './portal/pool/playwright
 import { LeaseReaper } from './portal/pool/lease-reaper.js';
 import {
   findProjectConfig,
-  projectIdsAt,
   readJournalEnabled,
   readProjectId,
 } from './command/cli/ports/resolve/cli-port.js';
-import { hasAnyProjectConnectedBefore } from './memory/recall/prior/connection-memory.js';
-import { reticleStateHome } from './command/daemon/daemon.js';
 import { probeLaunchableChromium } from './launch-chromium.js';
 import { attachJournal } from './wire-journal.js';
 import { reportOnboardingStep } from './telemetry/onboarding-funnel.js';
@@ -491,7 +490,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       fs,
       reticleRoot,
       linkedCloud: linkedCloudPort(fs, reticleRoot, homedir(), process.env),
-      artifactRootFor: artifactRootResolver(reticleRoot),
+      artifactRootFor: artifactRootResolver(reticleRoot, { servingDirectory: servingDirectoryOf }),
       now,
       bridgePort: port,
       browserProbe: probeLaunchableChromium,
@@ -503,12 +502,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     const server = createMcpServer(
       realInput !== undefined ? { ...deps, realInput } : deps,
       profile,
-      // A session live RIGHT NOW is stronger evidence than the durable memory, which can be empty or
-      // stale for a project the plugin wired without writing `.reticle.json` (see connection-memory.ts's
-      // KNOWN LIMIT). Without this OR, that project's `initialize` led with the first-install steps
-      // while a real session was already connected — see #1138.
-      bridge.sessions.count() > 0 ||
-        hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
+      instructionStateAt(port, bridge.sessions.count()),
     );
     // When the agent (the MCP client) disconnects cleanly, end every active session at once so the
     // HUD doesn't linger. (If the agent instead KILLS this process, the WS dies and the browser
@@ -721,7 +715,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     // daemon — the common case — so flows were listed, loaded and healed against wherever the
     // daemon happened to be launched. Wired in only one of the two places, a resolver is a resolver
     // that does not run.
-    artifactRootFor: artifactRootResolver(reticleRoot),
+    artifactRootFor: artifactRootResolver(reticleRoot, { servingDirectory: servingDirectoryOf }),
     now,
     bridgePort: port,
     browserProbe: probeLaunchableChromium,
@@ -738,9 +732,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
         ? effectiveDeps
         : { ...effectiveDeps, peerSkew: connectionSkew(peerSkew) },
       profile,
-      // See the sibling call in `start`: a live session outweighs empty/stale durable memory (#1138).
-      bridge.sessions.count() > 0 ||
-        hasAnyProjectConnectedBefore(reticleStateHome(), port, projectIdsAt(process.cwd())),
+      instructionStateAt(port, bridge.sessions.count()),
     ),
   );
   // `reticle drive <url>` when this daemon already owns the port: it asks HERE instead of trying to

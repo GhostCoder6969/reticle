@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { openFailureNote } from './open-note.js';
+import { ReticleTool } from '@reticlehq/core';
+import { openFailureNote, openLaunchFailureNote } from './open-note.js';
 
 describe('reticle open, when it silently used a different daemon', () => {
   it('says so FIRST, and names both ports', () => {
@@ -31,5 +32,15 @@ describe('reticle open, when it silently used a different daemon', () => {
 
   it('never advises a bare `reticle` binary, which the npx install does not create', () => {
     expect(openFailureNote(4400, 4470)).not.toMatch(/`reticle (init|serve|open)\b/);
+  });
+});
+
+describe('reticle open, when the OS browser launcher fails', () => {
+  it('offers the Reticle-owned browser lease with the URL', () => {
+    const note = openLaunchFailureNote('http://localhost:5173', 'xdg-open');
+    expect(note).toContain('`xdg-open`');
+    expect(note).toContain(`${ReticleTool.RUN} { tool: "${ReticleTool.LEASE}"`);
+    expect(note).toContain('action: "acquire"');
+    expect(note).toContain('url: "http://localhost:5173"');
   });
 });

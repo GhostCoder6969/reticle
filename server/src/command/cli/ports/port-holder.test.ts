@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parsePortHolder, describeForeignHolder } from './port-holder.js';
+import {
+  describeForeignHolder,
+  findListenerCwd,
+  parsePortHolder,
+  parseProcessCwd,
+} from './port-holder.js';
 
 /**
  * Naming the process that holds the port.
@@ -128,5 +133,46 @@ describe('a wedged daemon of our own', () => {
     );
     expect(msg, 'the pid we recorded is the one lead we have').toContain('65704');
     expect(msg, 'name the fix that works').toContain('reticle stop');
+  });
+});
+
+/**
+ * The working directory of a listener — how the daemon tells which checkout served a page when
+ * every worktree declares the same projectId. Parsed from real `lsof -a -p <pid> -d cwd -Fn` output.
+ */
+describe('parseProcessCwd', () => {
+  it('reads the cwd path from lsof -Fn output', () => {
+    expect(parseProcessCwd('p79345\nfcwd\nn/Users/me/repo/.claude/worktrees/pr-7\n')).toBe(
+      '/Users/me/repo/.claude/worktrees/pr-7',
+    );
+  });
+
+  it('keeps a path with spaces whole', () => {
+    expect(parseProcessCwd('p1\nfcwd\nn/Users/me/My Projects/app\n')).toBe(
+      '/Users/me/My Projects/app',
+    );
+  });
+
+  it('is null when lsof printed no name record', () => {
+    expect(parseProcessCwd('p1\nfcwd\n')).toBeNull();
+    expect(parseProcessCwd('')).toBeNull();
+  });
+});
+
+describe('findListenerCwd', () => {
+  it('asks for the LISTENER on the port, then that pid’s cwd', () => {
+    const calls: string[][] = [];
+    const exec = (command: string, args: readonly string[]): string | null => {
+      calls.push([command, ...args]);
+      return args.includes('-sTCP:LISTEN') ? 'p4242\ncnode\n' : 'p4242\nfcwd\nn/wt/pr-7\n';
+    };
+
+    expect(findListenerCwd(5174, exec)).toBe('/wt/pr-7');
+    expect(calls[0]).toContain('-sTCP:LISTEN');
+    expect(calls[1]).toEqual(['lsof', '-a', '-p', '4242', '-d', 'cwd', '-Fn']);
+  });
+
+  it('is null when nothing listens, or lsof cannot run', () => {
+    expect(findListenerCwd(5174, () => null)).toBeNull();
   });
 });

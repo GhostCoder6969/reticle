@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PortPresence, describePresence } from '@/command/daemon/binding/port-presence.js';
 import {
   DriveMode,
+  attachedApp,
   decideDriveMode,
   describeAttached,
   driveForeignHolder,
@@ -133,6 +134,15 @@ describe('what the user reads when drive cannot bind', () => {
     expect(line).toContain('did not connect');
   });
 
+  it('the not-ready line names the SDK package the page has to load', () => {
+    const line = describeAttached(4400, 'http://localhost:5173', {
+      sessionId: 'lease-7',
+      ready: false,
+    });
+    expect(line).toContain('@reticlehq/browser');
+    expect(line).not.toContain('@reticlehq/core');
+  });
+
   it('a lost bind race says a daemon took the port and that re-running attaches to it', () => {
     // The one case the pre-bind probe cannot close: something wins the port between the probe and
     // the listen. It is not a foreign holder and must not be described as one.
@@ -149,6 +159,109 @@ describe('what the user reads when drive cannot bind', () => {
     // is a second dead end at the moment the reader has already hit one.
     expect(message).toContain('RETICLE_PORT');
     expect(message).not.toContain('EADDRINUSE');
+  });
+});
+
+/**
+ * In a monorepo the port you meant for app A can be held by app B, and port, url and session id all
+ * look the same either way. The page reports its own project, so the attach line says which one it
+ * is and warns when this directory names a different one.
+ */
+describe('which app drive attached to', () => {
+  const url = 'http://localhost:5177';
+  const session = { sessionId: 'lease-7', ready: true };
+  const status = {
+    running: true,
+    sessionCount: 2,
+    sessions: [
+      { sessionId: 'tab-1', url: 'http://localhost:5173/', projectId: 'web' },
+      { sessionId: 'lease-7', url: `${url}/`, projectId: 'admin', title: 'Admin console' },
+    ],
+  };
+
+  it('reads the project and title of the attached session from /status', () => {
+    expect(attachedApp(status, 'lease-7', 'admin')).toEqual({
+      fields: { projectId: 'admin', title: 'Admin console', expectedProjectId: 'admin' },
+      mismatch: false,
+    });
+  });
+
+  it('names the project and title in the attach line', () => {
+    const line = describeAttached(4400, url, session, attachedApp(status, 'lease-7', 'admin'));
+    expect(line).toContain('admin');
+    expect(line).toContain('Admin console');
+    expect(line).not.toMatch(/warning/i);
+  });
+
+  it("warns when the page is a different project from this directory's .reticle.json", () => {
+    const line = describeAttached(4400, url, session, attachedApp(status, 'lease-7', 'web'));
+    expect(line).toMatch(/warning/i);
+    expect(line).toContain('web');
+    expect(line).toContain('admin');
+  });
+
+  it('does not warn when there is nothing to compare', () => {
+    const noProject = { sessions: [{ sessionId: 'lease-7', url }] };
+    expect(
+      describeAttached(4400, url, session, attachedApp(noProject, 'lease-7', 'web')),
+    ).not.toMatch(/warning/i);
+    expect(
+      describeAttached(4400, url, session, attachedApp(status, 'lease-7', undefined)),
+    ).not.toMatch(/warning/i);
+  });
+
+  /** Both come from the page, and the line and the JSON beside it go straight to a terminal. */
+  it('prints the project and title inert, so a page cannot write escape codes to the terminal', () => {
+    const esc = String.fromCharCode(27);
+    const csi = String.fromCharCode(0x9b);
+    const hostile = {
+      sessions: [
+        {
+          sessionId: 'lease-7',
+          url,
+          projectId: `admin${esc}]0;owned${String.fromCharCode(7)}`,
+          title: `Admin${esc}[2J${csi}1;1H`,
+        },
+      ],
+    };
+    const app = attachedApp(hostile, 'lease-7', 'web');
+    // The JSON line logs these fields too, and JSON leaves 0x80 to 0x9f as they are.
+    expect(JSON.stringify(app.fields)).not.toContain(csi);
+    const line = describeAttached(4400, url, session, app);
+    for (const control of [esc, csi, String.fromCharCode(7)]) {
+      expect(line).not.toContain(control);
+    }
+    expect(line).toContain('admin\uFFFD]0;owned\uFFFD');
+  });
+
+  /** The directory's project id comes from a `.reticle.json` anyone can commit, so it is no safer. */
+  it("prints this directory's project id inert too", () => {
+    const esc = String.fromCharCode(27);
+    const csi = String.fromCharCode(0x9b);
+    const app = attachedApp(status, 'lease-7', `web${esc}[2J${csi}1;1H`);
+    expect(JSON.stringify(app.fields)).not.toContain(csi);
+    const line = describeAttached(4400, url, session, app);
+    expect(line).toMatch(/warning/i);
+    for (const control of [esc, csi]) {
+      expect(line).not.toContain(control);
+    }
+    expect(line).toContain('web\uFFFD[2J\uFFFD1;1H');
+  });
+
+  it('compares the raw project ids, so ids that differ only in a control character still warn', () => {
+    const esc = String.fromCharCode(27);
+    const csi = String.fromCharCode(0x9b);
+    const both = { sessions: [{ sessionId: 'lease-7', url, projectId: `admin${csi}` }] };
+    const app = attachedApp(both, 'lease-7', `admin${esc}`);
+    expect(app.fields.projectId).toBe(app.fields.expectedProjectId);
+    expect(describeAttached(4400, url, session, app)).toMatch(/warning/i);
+  });
+
+  it('says nothing about a project when /status did not answer', () => {
+    expect(attachedApp(undefined, 'lease-7', 'web')).toEqual({
+      fields: { expectedProjectId: 'web' },
+      mismatch: false,
+    });
   });
 });
 

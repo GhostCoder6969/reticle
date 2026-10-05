@@ -164,6 +164,23 @@ describe('reticle_lease_acquire preflights the browser (#400)', () => {
     expect(acquired).toHaveLength(0);
   });
 
+  /** The user named a browser and the name is wrong. Nothing is missing from Playwright. */
+  it('names a wrong RETICLE_CHROMIUM_PATH without claiming Chromium is not installed', async () => {
+    const { pool, acquired } = fakePool();
+    const attempt = tool(ReticleTool.LEASE_ACQUIRE)(
+      {
+        ...baseDeps,
+        pool,
+        browserProbe: () =>
+          Promise.resolve({ exists: false, executablePath: '/opt/nope/chrome', configured: true }),
+      },
+      { url: 'http://localhost:3000/' },
+    );
+    await expect(attempt).rejects.toThrow(/RETICLE_CHROMIUM_PATH points at \/opt\/nope\/chrome/);
+    await expect(attempt).rejects.not.toThrow(/not installed/);
+    expect(acquired).toHaveLength(0);
+  });
+
   it('proceeds normally when the probe says Chromium is present', async () => {
     const { pool, acquired } = fakePool();
     const result = (await tool(ReticleTool.LEASE_ACQUIRE)(
@@ -750,6 +767,17 @@ describe('prioritising a tab that is already open', () => {
 });
 
 describe('reticle_lease with seedStorage', () => {
+  it('describes the accepted seedStorage keys and an example', () => {
+    const definition = LEASE_TOOLS.find((entry) => entry.name === ReticleTool.LEASE_ACQUIRE);
+
+    expect(definition?.inputSchema['seedStorage']?.description).toContain(
+      'local, session and cookies',
+    );
+    expect(definition?.inputSchema['seedStorage']?.description).toContain(
+      'seedStorage: { local: { token: "..." } }',
+    );
+  });
+
   it('propagates seedStorage to pool.acquire and never echoes seeded values in the tool result', async () => {
     const { pool, acquired } = fakePool();
     const deps = { ...baseDeps, pool } as unknown as ToolDeps;

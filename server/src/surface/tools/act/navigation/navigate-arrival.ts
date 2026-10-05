@@ -50,6 +50,20 @@ function samePage(a: string, b: string): boolean {
 }
 
 /**
+ * Same origin and path, different fragment: the browser changes the URL WITHOUT replacing the
+ * document. There is no replacement to wait for on this path, so it must not be treated as a
+ * same-page navigation (#1320).
+ */
+function sameDocumentFragmentChange(a: string, b: string): boolean {
+  if (!samePage(a, b)) return false;
+  try {
+    return new URL(a).hash !== new URL(b).hash;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The navigation target as an absolute URL, resolved against the tab being navigated — the same
  * resolution the browser applies. An agent passes a path (`/orders?id=4`) as often as a full URL,
  * and `samePage` cannot parse a path, so without this a relative navigation could never confirm.
@@ -92,6 +106,15 @@ export interface ArrivalScope {
    */
   navigatedFrom: string;
 
+  /**
+   * The DOCUMENT the session was on when the navigation was dispatched.
+   *
+   * A navigation to the page already shown replaces the document without changing the URL, so the
+   * old document is still the connected one until the replacement reports (#1320). Only a different
+   * document identity proves the replacement; `undefined` on both sides proves nothing and waits.
+   */
+  navigatedFromDocumentId?: string;
+
   /** Sessions already on the target before dispatch cannot prove this navigation arrived. */
   priorIds: ReadonlySet<string>;
 }
@@ -111,6 +134,21 @@ export function idsAtTarget(sessions: SessionManager, target: string): ReadonlyS
   return ids;
 }
 
+/**
+ * Whether `current` is a different document from the one the navigation was dispatched on.
+ *
+ * A new Session object under the same id is not enough: the SDK also reopens its socket in place,
+ * and that replaces the Session while the page stays exactly where it was. What a real unload
+ * changes is the document id — the one sampled before dispatch (`navigatedFromDocumentId`) against
+ * the one the live session is reporting (`currentDocumentId`). Either side not having reported one
+ * yet is "cannot tell", which is never reported as a new document.
+ */
+function documentUnloaded(scope: ArrivalScope, current: Session): boolean {
+  const before = scope.navigatedFromDocumentId;
+  const after = current.currentDocumentId;
+  return before !== undefined && after !== undefined && before !== after;
+}
+
 function findArrival(
   sessions: SessionManager,
   target: string,
@@ -118,12 +156,24 @@ function findArrival(
   currentSession: Session,
 ): NavigateArrival | null {
   let arrived: NavigateArrival | null = null;
+  // One snapshot for the whole look, so "is the driven session still connected?" and "has a
+  // replacement reported?" are answered from the same moment.
+  const snapshot = sessions.all();
+  const drivenPresent = snapshot.some((s) => s.id === currentSession.id);
+  // Navigating to the page already shown replaces its document without moving the URL, so the
+  // OLD document is still the connected one at the first looks; its presence there is not
+  // arrival until the replacement reports a different document identity (#1320). A fragment-only
+  // change keeps the document, so it is an arrival as soon as the URL matches.
+  const replacesDocument =
+    samePage(scope.navigatedFrom, target) &&
+    !sameDocumentFragmentChange(scope.navigatedFrom, target);
 
-  for (const s of sessions.all()) {
+  for (const s of snapshot) {
     // The currently tracked document gets priority because it is the strongest
     // evidence of where this navigation went.
     if (s.id === currentSession.id) {
       if (samePage(s.url, target)) {
+        if (replacesDocument && s.currentDocumentId === scope.navigatedFromDocumentId) continue;
         return { sessionId: s.id };
       }
 
@@ -135,6 +185,12 @@ function findArrival(
     // A different session that was already at the target cannot prove this
     // navigation arrived.
     if (scope.priorIds.has(s.id)) continue;
+
+    // While the replaced document is still connected, a DIFFERENT session at the target is an
+    // unrelated arrival (a second tab, a neighbour app): the replacement this navigation waits
+    // for has not reported yet, and letting the newcomer stand in would confirm too early and
+    // name the wrong session (#1320).
+    if (replacesDocument && drivenPresent) continue;
 
     if (samePage(s.url, target)) {
       if (null === arrived) arrived = { sessionId: s.id };
@@ -188,7 +244,13 @@ export async function awaitArrival(
   const current = sessions.get(scope.navigatedSession.id);
 
   if (current !== undefined) {
-    if (!samePage(current.url, scope.navigatedFrom) && !samePage(current.url, target)) {
+    // Sitting on `navigatedFrom` means two different things: a tab that has not moved, or a page
+    // that unloaded and came back here (an auth guard bouncing `/checkout` to `/login` while the
+    // tab started on `/login`). Only a document that is provably new tells them apart.
+    if (
+      !samePage(current.url, target) &&
+      (!samePage(current.url, scope.navigatedFrom) || documentUnloaded(scope, current))
+    ) {
       return {
         sessionId: current.id,
         landedOn: current.url,
@@ -200,6 +262,9 @@ export async function awaitArrival(
 
   const successor = await awaitDocumentSuccessor(sessions, scope.navigatedSession, 0, clock);
 
+  // A successor under another id is only "unique at the origin", which a tab opened by someone else
+  // after the driven one went away satisfies equally. On the starting page that guess cannot be told
+  // from a redirect, so it is not reported as one.
   if (
     successor !== null &&
     !samePage(successor.url, target) &&
