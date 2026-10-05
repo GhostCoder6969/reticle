@@ -340,10 +340,32 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     p.mount();
     p.sessionStart();
     click(document.querySelector('[data-reticle-fab]'));
+    /*
+     * The DECLARED value each property ends up with, read from every stylesheet rule that matches the
+     * element, in order. jsdom does not resolve var(), so computed styles compared two unresolved
+     * strings and nearly always agreed; the declarations themselves differ when the styling does.
+     */
     const look = (el: Element | null): string[] => {
       if (null === el) throw new Error('toolbar button missing');
-      const s = getComputedStyle(el);
-      return [s.backgroundColor, s.color, s.borderRadius, s.width, s.height];
+      const props = ['background', 'background-color', 'color', 'border-radius', 'width', 'height'];
+      const won: Record<string, string> = {};
+      for (const sheet of Array.from(document.styleSheets)) {
+        for (const rule of Array.from(sheet.cssRules)) {
+          if (!(rule instanceof CSSStyleRule)) continue;
+          let matches = false;
+          try {
+            matches = el.matches(rule.selectorText);
+          } catch {
+            /* a selector jsdom cannot parse matches nothing here */
+          }
+          if (!matches) continue;
+          for (const prop of props) {
+            const value = rule.style.getPropertyValue(prop);
+            if ('' !== value) won[prop] = value;
+          }
+        }
+      }
+      return props.map((prop) => `${prop}=${won[prop] ?? ''}`);
     };
     click(document.querySelector('[data-reticle-chat-view-btn="flows"]'));
     const flows = look(document.querySelector('[data-reticle-chat-view-btn="flows"]'));
