@@ -4,6 +4,19 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/browser` + `@reticlehq/server`: the HUD has one frame for every page, and the rail's notices are edited without a release.** Every tab shares one height and layout that does not cover the app, signing in opens the browser from the HUD, and the rail always carries the sign-in ask for a signed-out machine. The rail's notices come from a small JSON file on reticle.sh that the daemon fetches, caches with its ETag and pushes to the HUD, so a host app's Content-Security-Policy cannot block it. Each notice is checked against a schema and may only link to Reticle's own sites. `RETICLE_HUD_NOTICES_URL` points it elsewhere.
+
+### Fixed
+
+- **`@reticlehq/server`: two agents leasing the same origin got the same tab.** A live lease was handed to whoever acquired next, so each agent's verdicts could rest on the other's clicks, and an acquire with `seedStorage` closed the other agent's tab. A lease is now handed back only to the MCP connection that took it. Closes [#1226](https://github.com/reticlehq/reticle/issues/1226).
+- **`@reticlehq/engine`: `stale-response-applied` fired on reads that were never racing.** A fan-out over `?id=`, two effects with different filters, and a list beside its count all came back `verified: "no"` on a working page. Reads now supersede each other only when they share a key set, name the same resource and were not issued in the same task. Closes [#1225](https://github.com/reticlehq/reticle/issues/1225).
+- **`@reticlehq/engine`: a rejected write that is the behaviour under test can be verified.** A 409 on a duplicate email was contradicted by its own failure, because the app's acknowledgement was on screen rather than in a store. An alert, a field marked `aria-invalid`, or the server's error text on screen now count as the app acknowledging the failure. An error envelope whose every part is empty no longer reads as a failed operation. Part of [#984](https://github.com/reticlehq/reticle/issues/984).
+- **`@reticlehq/server`: a harness drive must prove something.** A drive that saved a flow without a passing check now says so instead of reporting success, and a drive on Reticle's budget needs a confirmed `yes`.
+- **`@reticlehq/server`: sync never counts an unconfirmed run as delivered, never hangs, and honours `sync.runs: false`.** A plugin-only app's runs land in its own `.reticle`, not `unmatched/`.
+- **`@reticlehq/server`: the impact streak counts days, not a counter,** so a machine-wide view no longer shows a one-day streak.
+
 ## [3.5.0] — 2026-10-01
 
 ### Added

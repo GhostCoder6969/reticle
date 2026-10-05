@@ -165,11 +165,30 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
     .map((e) => asString(e.data['error']))
     .filter((text): text is string => text !== undefined && text.length >= MIN_ECHOED_ERROR_LENGTH);
   const echoesAnError = events.some((e) => {
-    if (e.type !== EventType.STATE_CHANGE) return false;
-    const value = asString(e.data['value']);
+    // On screen counts as much as in state: the user reading the server's message is the app
+    // acknowledging the failure, not hiding it (#984).
+    const value =
+      e.type === EventType.STATE_CHANGE
+        ? asString(e.data['value'])
+        : e.type === EventType.DOM_TEXT
+          ? asString(e.data['text'])
+          : e.type === EventType.DOM_ADDED
+            ? asString(e.data['name'])
+            : undefined;
     return value !== undefined && errors.some((text) => value.includes(text));
   });
   if (echoesAnError) return true;
+  // So does the accessible way of telling a user something went wrong: an alert appearing, or a
+  // field marked invalid. A rejected write that is the behaviour under test (a 409 on a duplicate
+  // email) is acknowledged exactly this way, and was contradicted for it (#984).
+  const shownAsError = events.some(
+    (e) =>
+      (e.type === EventType.DOM_ADDED && ALERT_ROLE === e.data['role']) ||
+      (e.type === EventType.DOM_ATTR &&
+        ARIA_INVALID === e.data['attr'] &&
+        'true' === e.data['value']),
+  );
+  if (shownAsError) return true;
 
   return events.some((e) => {
     // A failure-shaped SIGNAL is an acknowledgement too. An app that fires `auth:denied` has plainly
@@ -181,6 +200,9 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
     return ACKNOWLEDGED.test(path) || ('string' === typeof value && ACKNOWLEDGED.test(value));
   });
 }
+
+const ALERT_ROLE = 'alert';
+const ARIA_INVALID = 'aria-invalid';
 
 const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
 
