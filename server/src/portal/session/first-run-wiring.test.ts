@@ -25,7 +25,9 @@ describe('wiring the app on first use', () => {
     const calls: { args: readonly string[]; cwd: string }[] = [];
     const run: RunCli = (args, cwd) => {
       calls.push({ args, cwd });
-      return Promise.resolve({ code: 0, stdout: PLAN, stderr: '' });
+      // As init really does it under --json: the plan on stderr, the one object on stdout.
+      const at = PLAN.indexOf('{');
+      return Promise.resolve({ code: 0, stdout: PLAN.slice(at), stderr: PLAN.slice(0, at) });
     };
     const wiring = firstRunWiring({ port: 4410, cliPath: '/x/cli.js', run });
     const first = await wiring.wire('/work/shop');
@@ -59,9 +61,13 @@ describe('wiring the app on first use', () => {
     const home = mkdtempSync(join(tmpdir(), 'home-'));
     const app = mkdtempSync(join(tmpdir(), 'app-'));
     writeFileSync(join(app, 'package.json'), '{}');
-    expect(projectDirectoryOf(home, home)).toBeUndefined();
-    expect(projectDirectoryOf(mkdtempSync(join(tmpdir(), 'bare-')), home)).toBeUndefined();
-    expect(projectDirectoryOf(app, home)).toBe(app);
+    expect(projectDirectoryOf(home, home, () => false)).toBeUndefined();
+    expect(
+      projectDirectoryOf(mkdtempSync(join(tmpdir(), 'bare-')), home, () => false),
+    ).toBeUndefined();
+    expect(projectDirectoryOf(app, home, () => false)).toBe(app);
+    // A project that is already wired has nothing for a first run to do.
+    expect(projectDirectoryOf(app, home, () => true)).toBeUndefined();
   });
 
   it('reads no result from an init that printed none', () => {

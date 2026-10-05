@@ -11,6 +11,13 @@ import { z } from 'zod';
 import { DiscoveryInvite, NoSessionAction } from '@reticlehq/core';
 import type { ToolDeps } from './tool-kit.js';
 
+/** The answers that mean "this app is not set up yet", which a first run can settle by wiring it. */
+const FIRST_RUN_ACTIONS: ReadonlySet<string> = new Set([
+  NoSessionAction.RUN_INIT,
+  NoSessionAction.START_DEV_SERVER,
+  NoSessionAction.OPEN_APP,
+]);
+
 /** The fields only an empty list carries, declared so a schema-aware client does not strip them. */
 export const EMPTY_SESSION_LIST_OUTPUT = {
   why: z
@@ -63,8 +70,11 @@ export async function emptySessionList(
   const next = deps.sessions.noSessionNextAction();
   // The first run wires the app, not the installation: the daemon runs init itself, once,
   // in its own project, and says what it changed. A daemon outside any project asks instead.
+  // Not only on `run_init`: an unwired app whose dev server is not running yet answers
+  // `start_dev_server`, which is the commonest first run of all, and init starts that server itself.
+  // `projectDirectory` refuses a project that is already wired, so a wired app is never re-run.
   const dir =
-    NoSessionAction.RUN_INIT === next?.action
+    next !== undefined && FIRST_RUN_ACTIONS.has(next.action)
       ? deps.firstRun?.projectDirectory(dirname(deps.reticleRoot))
       : undefined;
   if (dir !== undefined && deps.firstRun !== undefined) {

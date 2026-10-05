@@ -17,6 +17,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
 
 /** init has a dev server to start and a page to wait for; past this it is not coming. */
 const WIRE_TIMEOUT_MS = 120_000;
@@ -59,9 +60,15 @@ export interface FirstRunWiring {
   wire(directory: string): Promise<WireOutcome>;
 }
 
-export function projectDirectoryOf(cwd: string, home = homedir()): string | undefined {
+export function projectDirectoryOf(
+  cwd: string,
+  home = homedir(),
+  wired: (dir: string) => boolean = (dir) => readProjectId(dir) !== undefined,
+): string | undefined {
   const dir = resolve(cwd);
   if (dir === resolve(home) || dir === resolve('/')) return undefined;
+  // Already wired: nothing for a first run to do, and init over a wired app proves nothing.
+  if (wired(dir)) return undefined;
   return existsSync(join(dir, PACKAGE_JSON)) ? dir : undefined;
 }
 
@@ -124,7 +131,9 @@ export function firstRunWiring(options: {
       if (held !== undefined) return held;
       const outcome = run(['init', '--no-mcp', '--json', '--port', String(options.port)], directory)
         .then(({ code, stdout, stderr }): WireOutcome => {
-          const { steps, result } = readInitOutput(stdout);
+          // Under --json the plan lines may go to stderr, keeping stdout for the one object.
+          const { result } = readInitOutput(stdout);
+          const { steps } = readInitOutput(`${stdout}\n${stderr}`);
           const record =
             'object' === typeof result && null !== result
               ? (result as Record<string, unknown>)
