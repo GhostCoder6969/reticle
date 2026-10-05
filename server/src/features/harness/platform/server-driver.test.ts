@@ -40,7 +40,18 @@ describe('the platform drives, this machine executes', () => {
               done: false,
               status: 'running',
             }
-          : { turn: 1, calls: [], text: 'ok', done: true, status: 'finished', summary: 'proved' },
+          : {
+              turn: 1,
+              calls: [],
+              text: 'ok',
+              done: true,
+              status: 'finished',
+              summary: 'proved',
+              // As the platform does: a replayed reply (any later turn) carries no spend.
+              ...(1 === body['turn']
+                ? { usage: { input: 10, output: 2, cacheRead: 5, cacheWrite: 0 } }
+                : {}),
+            },
     });
     const executed: string[] = [];
     const result = await runHarness(
@@ -50,6 +61,7 @@ describe('the platform drives, this machine executes', () => {
     expect(executed).toEqual(['reticle_act_and_wait:{"ref":"e1"}']);
     expect(result.stopReason).toBe('finished');
     expect(result.summary).toBe('proved');
+    expect(result.usage).toEqual({ input: 10, output: 2, cacheRead: 5, cacheWrite: 0 });
     expect(asked[0]?.body).toMatchObject({ persona: 'a shopper' });
     // The second turn carried exactly the outcome of the call it was asked to make.
     expect(asked[2]?.body).toMatchObject({

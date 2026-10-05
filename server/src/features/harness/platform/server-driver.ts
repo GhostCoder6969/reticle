@@ -44,6 +44,7 @@ interface TurnReply {
   done: boolean;
   status: string;
   summary?: string;
+  usage?: { input: number; output: number; cacheRead: number; cacheWrite: number };
 }
 
 /** The platform's url and this project's key, when the machine is linked. */
@@ -140,10 +141,13 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
         outcomes,
       })) as TurnReply;
       turn = reply.turn + 1;
+      // The platform's spend, reported so the drive's cost is visible here as it is for a local one.
+      const usage = reply.usage === undefined ? {} : { usage: reply.usage };
       if (reply.done) {
         // The platform has finished: `finish` ends the local loop the same way a local model would.
         return {
           text: reply.text,
+          ...usage,
           calls: [
             {
               id: `server-finish-${String(reply.turn)}`,
@@ -153,7 +157,7 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
           ],
         };
       }
-      return { text: reply.text, calls: reply.calls };
+      return { text: reply.text, calls: reply.calls, ...usage };
     },
   };
 }

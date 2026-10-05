@@ -507,7 +507,10 @@ async function refusedByPlatform(
   // From here the drive bills Reticle, so it needs a confirmed yes, not the absence of a no.
   if (config === undefined) return MSG_HARNESS_UNCONFIRMED;
   if (!config.harnessEntitled) return MSG_HARNESS_UNCLAIMED;
-  if (!config.providerReady) return MSG_HARNESS_NO_PROVIDER;
+  // The platform's own Harness (the default here) uses the platform's model and refuses for itself;
+  // the provider check is for a LOCAL driver asked for by name that would spend through the proxy.
+  const asked = options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? config.provider;
+  if (SERVER_DRIVER !== asked && !config.providerReady) return MSG_HARNESS_NO_PROVIDER;
   return undefined;
 }
 
@@ -655,39 +658,21 @@ function buildDriver(
 ): { driver: ModelDriver; name: string } {
   const local = (): { driver: ModelDriver; name: string } =>
     buildLocalDriver(env, maxSteps, plan, requested, fills);
+  // The platform's Harness, when asked for by name or when the platform names it as this project's
+  // driver (the platform's config is the rollout switch). Asked for, it must be configured: never a
+  // quiet substitution.
+  if (SERVER_DRIVER !== requested) return local();
   const platform = serverOptionsFromEnv(env);
-  // The platform's Harness is the paid product: a linked machine with no provider key of its own
-  // drives through it. Asked for by name it must be configured; it is never a quiet substitution.
-  const ownKey =
-    harnessKeyOf(env, ReticleEnv.HARNESS_KEY) ||
-    harnessKeyOf(env, ReticleEnv.HARNESS_JEV_KEY) ||
-    harnessKeyOf(env, ReticleEnv.HARNESS_OPENAI_KEY);
-  const wantsServer =
-    SERVER_DRIVER === requested ||
-    ((requested === undefined || 0 === requested.length) && platform !== undefined && !ownKey);
-  if (!wantsServer) return local();
   if (platform === undefined) throw new Error(MSG_NO_HARNESS_KEY);
-  let fallback: ModelDriver | undefined;
-  try {
-    fallback = SERVER_DRIVER === requested ? undefined : local().driver;
-  } catch {
-    fallback = undefined;
-  }
   return {
     driver: serverDriver({
       ...platform,
       ...(persona === undefined ? {} : { persona }),
       plan: planAsText(plan),
       maxSteps,
-      ...(fallback === undefined ? {} : { fallback }),
     }),
     name: SERVER_DRIVER,
   };
-}
-
-function harnessKeyOf(env: Record<string, string | undefined>, name: string): boolean {
-  const value = env[name];
-  return value !== undefined && 0 < value.length;
 }
 
 function buildLocalDriver(
