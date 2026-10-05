@@ -29,6 +29,19 @@ describe('RecordingStore', () => {
     expect(store.stop('flow')).toBeUndefined();
   });
 
+  // #988: one daemon serves every app on the machine, and a click in an unrelated app landed in
+  // somebody else's saved flow, with its assertion attached to that flow's last step.
+  it('takes only the steps and assertions of the session that started it', () => {
+    const store = new RecordingStore();
+    store.start('mine', 0, '/', 'tab-a');
+    store.capture(step('reticle_act'), undefined, 'tab-a');
+    store.capture(step('reticle_act_sequence'), undefined, 'tab-b');
+    store.attachExpect({ kind: 'signal', name: 'other:app' }, 'tab-b');
+    const rec = store.stop('mine');
+    expect(rec?.steps.map((s) => s.tool)).toEqual(['reticle_act']);
+    expect(rec?.steps[0]?.expect).toBeUndefined();
+  });
+
   it('capture with no NAMED recording still records — the ambient tape opens itself', () => {
     /*
      * Inverted deliberately. This used to assert that a step driven with no recording open was a

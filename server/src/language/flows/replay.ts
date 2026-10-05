@@ -104,11 +104,16 @@ export function pathOf(url: string | undefined): string | undefined {
  * saved a flow with zero steps.
  */
 export function captureAct(
-  recordings: { active: () => string[]; capture: (step: RecordedStep, route?: string) => void },
+  recordings: {
+    active: () => string[];
+    capture: (step: RecordedStep, route?: string, session?: string) => void;
+  },
   args: Record<string, unknown>,
   res: unknown,
   /** Where this step ran, so the ambient tape can be cut into journeys. See RecordedStep.route. */
   route?: string,
+  /** The session that acted: only recordings it started take the step. */
+  session?: string,
 ): void {
   // NO `active()` gate. `RecordingStore.capture` opens the AMBIENT tape on its first step, and that
   // branch was unreachable from here: this returned early whenever nothing was open, and the only
@@ -129,7 +134,7 @@ export function captureAct(
   if (route !== undefined) step.page = route;
   const intent = asString(args['intent'])?.trim();
   if (intent !== undefined && intent.length > 0) step.intent = intent;
-  recordings.capture(step, route);
+  recordings.capture(step, route, session);
 }
 
 /**
@@ -144,18 +149,20 @@ export function captureVerdictedAct(
   res: unknown,
   route: string | undefined,
   verified: string | undefined,
+  session?: string,
 ): void {
   const { until: _until, predicate: _predicate, ...unproved } = args;
-  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route);
+  captureAct(recordings, Verified.YES === verified ? args : unproved, res, route, session);
 }
 
 /** Fold a PASSING standalone assertion into the step it proved. See RecordingStore.attachExpect. */
 export function captureAssertion(
-  recordings: { attachExpect: (expect: Predicate) => void },
+  recordings: { attachExpect: (expect: Predicate, session?: string) => void },
   raw: unknown,
+  session?: string,
 ): void {
   const expect = enforceableExpect(raw);
-  if (expect !== undefined) recordings.attachExpect(expect);
+  if (expect !== undefined) recordings.attachExpect(expect, session);
 }
 
 /**

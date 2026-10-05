@@ -38,6 +38,12 @@ export interface RecordedStep {
 
 interface ActiveRecording {
   cursor: number;
+  /**
+   * The session (tab) that started it. Only that session's steps join it: one daemon serves every
+   * agent and app on the machine, and capturing into every open recording put a click from an
+   * unrelated app into somebody else's saved flow (#988). Absent: takes every session's steps.
+   */
+  session?: string;
   steps: RecordedStep[];
   /** The route the journey began on. See CompiledProgram.startPath. */
   startPath?: string;
@@ -120,15 +126,23 @@ export class RecordingStore {
   /** A navigation came after the last captured step — see markNavigated. */
   #navigatedSinceStep = false;
 
-  start(name: string, cursor: number, startPath?: string): void {
+  start(name: string, cursor: number, startPath?: string, session?: string): void {
     const openedOver = new Map<string, number>();
-    for (const [outer, rec] of this.#active) openedOver.set(outer, rec.steps.length);
+    for (const [outer, rec] of this.#targets(session)) openedOver.set(outer, rec.steps.length);
     this.#active.set(name, {
       cursor,
       steps: [],
       openedOver,
       ...(startPath === undefined ? {} : { startPath }),
+      ...(session === undefined ? {} : { session }),
     });
+  }
+
+  /** The open recordings a step from `session` belongs to. See ActiveRecording.session. */
+  #targets(session: string | undefined): [string, ActiveRecording][] {
+    return [...this.#active].filter(
+      ([, rec]) => rec.session === undefined || session === undefined || rec.session === session,
+    );
   }
 
   isRecording(name: string): boolean {
@@ -157,7 +171,7 @@ export class RecordingStore {
    * Opened lazily on the first step rather than in the constructor: a store that never records
    * anything should not carry an empty tape, and "did anything happen at all" stays answerable.
    */
-  capture(step: RecordedStep, route?: string): void {
+  capture(step: RecordedStep, route?: string, session?: string): void {
     this.#navigatedSinceStep = false;
     if (!this.#active.has(AMBIENT_RECORDING)) {
       this.#active.set(AMBIENT_RECORDING, {
@@ -166,7 +180,7 @@ export class RecordingStore {
         openedOver: new Map(),
       });
     }
-    for (const [name, rec] of this.#active) {
+    for (const [name, rec] of this.#targets(session)) {
       // The ambient tape is opened by the system and closed by nobody, so it is the one recording
       // with no human deciding when it has seen enough. Bounded here rather than left to grow for
       // the length of a daemon's life. Appending STOPS at the cap instead of dropping the oldest: a
@@ -193,9 +207,9 @@ export class RecordingStore {
    * reached the recorder — only the act tools called `capture` — so the flow kept the click and lost
    * the proof. What the step already declared is kept; the new check joins it under `allOf`.
    */
-  attachExpect(expect: Predicate): void {
+  attachExpect(expect: Predicate, session?: string): void {
     if (this.#navigatedSinceStep) return;
-    for (const rec of this.#active.values()) {
+    for (const [, rec] of this.#targets(session)) {
       const last = rec.steps.at(-1);
       if (last === undefined) continue;
       const held = last.expect;
@@ -223,9 +237,9 @@ export class RecordingStore {
    * Fills only a step that has none, so calling it after an action that captured nothing leaves the
    * previous step's own answer alone.
    */
-  markEnded(page: string | undefined): void {
+  markEnded(page: string | undefined, session?: string): void {
     if (page === undefined) return;
-    for (const rec of this.#active.values()) {
+    for (const [, rec] of this.#targets(session)) {
       const last = rec.steps.at(-1);
       if (last !== undefined && last.endPage === undefined) last.endPage = page;
     }

@@ -263,7 +263,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // drive native pointer input when a provider is available; otherwise fall back.
         const real = await tryRealInput(deps, session, ref, action, args);
         if (real.result !== undefined) {
-          captureAct(deps.recordings, args, real.result, routeBefore);
+          captureAct(deps.recordings, args, real.result, routeBefore, session.id);
           settledOutcome = real.settled ?? undefined;
           // Native input reports no synthetic effect block, so nothing measured in-target: undefined
           // (the weaker empty-window test), never a fabricated zero.
@@ -287,7 +287,7 @@ export const ACT_TOOLS: ToolDef[] = [
           args: args['args'] ?? {},
         });
         if (!result.ok) throw new Error(result.error ?? 'act failed');
-        captureAct(deps.recordings, args, result.result, routeBefore);
+        captureAct(deps.recordings, args, result.result, routeBefore, session.id);
         // lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
         const r = asRecord(result.result);
         if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
@@ -308,7 +308,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(session),
         });
       } finally {
-        deps.recordings.markEnded(pathOf(session.url));
+        deps.recordings.markEnded(pathOf(session.url), session.id);
         // Close the window on every exit (settle or throw), recording the action + settle outcome.
         session.finishAction(
           undefined,
@@ -971,8 +971,9 @@ export const ACT_TOOLS: ToolDef[] = [
             dispatched.result,
             routeBeforeWait,
             recordedVerdict,
+            session.id,
           );
-        deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url));
+        deps.recordings.markEnded(pathOf(currentOf(deps.sessions, session).url), session.id);
         acted.finishAction(
           verdictEffect,
           settledOutcome,

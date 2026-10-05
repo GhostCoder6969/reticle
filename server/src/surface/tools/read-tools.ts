@@ -187,7 +187,7 @@ export const READ_TOOLS: ToolDef[] = [
       // Where the journey begins, so a saved flow can navigate here before step 1 instead of
       // replaying from wherever the page happens to be. Pathname only: a host or port belongs to
       // the machine that recorded it, not to the journey.
-      deps.recordings.start(name, cursor, pathnameOf(session.url));
+      deps.recordings.start(name, cursor, pathnameOf(session.url), session.id);
       return Promise.resolve({ recordingName: name, since: cursor });
     },
   },

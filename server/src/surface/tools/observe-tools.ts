@@ -604,7 +604,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // explicit `since` may reach back past the last step, where replay would not find it. The
       // store itself refuses when a navigation came after that step: see RecordingStore.markNavigated.
       if (Verified.YES === decision['verified'] && args['since'] === undefined) {
-        captureAssertion(deps.recordings, predicate);
+        captureAssertion(deps.recordings, predicate, session.id);
       }
       return withControl(session, {
         ...decision,
