@@ -256,6 +256,7 @@ export class ImpactStore {
   readonly #config: ConfigSource;
   readonly #notices: NoticesSource;
   readonly #sdkVersion: string;
+  readonly #coverage: (() => Record<string, number> | undefined) | undefined;
 
   constructor(opts: {
     reticleRoot: string;
@@ -272,7 +273,10 @@ export class ImpactStore {
     notices?: NoticesSource;
     /** This build's version, for notices that need a newer SDK. Passed in: the store reads no package. */
     sdkVersion?: string;
+    /** Reticle Coverage per level, as percentages. Injected: the ledger lives in `features/exhaust`. */
+    coverage?: () => Record<string, number> | undefined;
   }) {
+    this.#coverage = opts.coverage;
     this.#paths = impactPaths(opts.reticleRoot, opts.globalRoot ?? homedir());
     // Resolved per snapshot, not cached: a user who runs `reticle login` in another terminal must
     // see the HUD change without restarting the daemon that is watching their app.
@@ -344,6 +348,8 @@ export class ImpactStore {
       now: this.#now(),
     });
     if (0 < notices.length) snap.notices = notices;
+    const coverage = this.#coverage?.();
+    if (coverage !== undefined) snap.coverage = coverage;
     return snap;
   }
 

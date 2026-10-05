@@ -34,6 +34,9 @@ const SHARE_VIA_HANDLE = '';
 
 export const REPORT_TEXT = {
   TITLE: 'Impact',
+  COVERAGE: 'Reticle Coverage',
+  COVERAGE_HELP:
+    'How much of this app Reticle has reached, touched and proved, from the coverage ledger in .reticle',
   PROJECT: 'This project',
   GLOBAL: 'All projects',
   GLOBAL_TITLE: 'Every project on this computer',
@@ -178,3 +181,12 @@ export function parseImpactSnapshot(value: unknown): ImpactSnapshot | undefined 
   const parsed = ImpactSnapshotSchema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
+
+/** Reticle Coverage's levels, in the order they are earned, with what each one counts. */
+export const COVERAGE_LEVELS: readonly { key: string; label: string }[] = [
+  { key: 'reached', label: 'routes reached' },
+  { key: 'touched', label: 'controls touched' },
+  { key: 'proved', label: 'controls proved' },
+  { key: 'branched', label: 'write failures driven' },
+  { key: 'executed', label: 'code executed' },
+];

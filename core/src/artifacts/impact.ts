@@ -266,6 +266,11 @@ export const ImpactSnapshotSchema = z.object({
    * `HudNoticeSchema` from `@reticlehq/core/hud` before rendering it.
    */
   notices: z.array(z.unknown()).max(8).optional(),
+  /**
+   * Reticle Coverage: each level's percentage from the project's coverage ledger (`reached` routes,
+   * `proved` controls, `executed` code, ...). Numbers only. Absent until something was measured.
+   */
+  coverage: z.record(z.number()).optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 

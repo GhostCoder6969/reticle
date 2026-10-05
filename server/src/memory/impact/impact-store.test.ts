@@ -239,6 +239,22 @@ describe('the dashboard link', () => {
 });
 
 /** The rail's notices: chosen by the daemon for THIS machine, never the whole file. */
+describe('Reticle Coverage in the snapshot', () => {
+  it('carries the levels its source reports, and nothing when there is none', () => {
+    const base = {
+      reticleRoot: join(mkdtempSync(join(tmpdir(), 'impact-cov-')), '.reticle'),
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-cov-home-')),
+      notices: { read: () => [] },
+    };
+    expect(
+      new ImpactStore({ ...base, coverage: () => ({ proved: 40 }) }).snapshot().coverage,
+    ).toEqual({ proved: 40 });
+    expect(new ImpactStore({ ...base, coverage: () => undefined }).snapshot()).not.toHaveProperty(
+      'coverage',
+    );
+  });
+});
+
 describe('the notices in the snapshot', () => {
   const home = (): string => mkdtempSync(join(tmpdir(), 'impact-notices-home-'));
   const entries = [

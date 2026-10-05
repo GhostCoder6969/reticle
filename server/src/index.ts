@@ -1,4 +1,5 @@
 import { applyHarnessSwitch, harnessConfigsByRoot } from '@/memory/cloud/harness-config.js';
+import { coveragePercents } from './features/exhaust/ledger.js';
 import { firstRunWiring } from './portal/session/first-run-wiring.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import { join } from 'node:path';
@@ -403,6 +404,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed
     // to reach for the other.
     configForRoot,
+    coverageForRoot: (root: string) => () => coveragePercents(root),
   });
   const uninstallHooks = wireHooks(
     options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT),
@@ -554,6 +556,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     // lives in cloud memory, the platform read lives in the harness feature, and neither is allowed
     // to reach for the other.
     configForRoot,
+    coverageForRoot: (root: string) => () => coveragePercents(root),
   });
 
   const security = await resolveBridgeSecurityWithAutoToken(options);

@@ -24,6 +24,7 @@ import {
   buildXShareUrl,
   compactDuration,
   compactNumber,
+  COVERAGE_LEVELS,
 } from './chrome/presenter-report-copy.js';
 
 /**
@@ -177,11 +178,30 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
   return `<div class="reticle-report-defects-wrap"><div class="reticle-report-defects-head"><span class="reticle-report-section">${REPORT_TEXT.DEFECTS}</span>${sync}</div><ul class="reticle-report-defects">${rows}</ul>${more}</div>`;
 }
 
+/**
+ * Reticle Coverage: the headline is controls PROVED, the level that is evidence rather than a visit;
+ * the rest show beside it. Only levels this HUD knows are rendered, so a key from the daemon is never
+ * printed as text, and numbers are rounded before they touch the markup.
+ */
+function coverageHtml(coverage: Readonly<Record<string, number>> | undefined): string {
+  if (coverage === undefined) return '';
+  const known = COVERAGE_LEVELS.filter((l) => 'number' === typeof coverage[l.key]);
+  if (0 === known.length) return '';
+  const pct = (key: string): string => `${String(Math.round(coverage[key] ?? 0))}%`;
+  const head = 'number' === typeof coverage['proved'] ? pct('proved') : pct(known[0]?.key ?? '');
+  const rows = known
+    .map((l) => `<span class="reticle-report-coverage-level">${pct(l.key)} ${l.label}</span>`)
+    .join('');
+  return `<div class="reticle-report-coverage" title="${REPORT_TEXT.COVERAGE_HELP}"><span class="reticle-report-section">${REPORT_TEXT.COVERAGE}</span><span class="reticle-report-coverage-value">${head}</span><div class="reticle-report-coverage-levels">${rows}</div></div>`;
+}
+
 export function reportBodyHtml(
   scope: ImpactScope,
   dashboardUrl?: string,
   account?: AccountState,
   projectName?: string,
+  /** This project's coverage. Passed only for the project scope: it is not a machine-wide number. */
+  coverage?: Readonly<Record<string, number>>,
 ): string {
   const c = scope.counts;
   if (0 === c.calls) return `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`;
@@ -222,7 +242,7 @@ export function reportBodyHtml(
    * will not find. The two never both render — `localOnly` is gated on there being NO dashboard.
    */
   const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}</div>`;
-  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
+  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
 /**
@@ -422,6 +442,7 @@ export class PresenterReport {
             this.#snapshot?.dashboardUrl,
             this.#snapshot?.account,
             this.#snapshot?.projectName,
+            this.#global ? undefined : this.#snapshot?.coverage,
           );
   }
 

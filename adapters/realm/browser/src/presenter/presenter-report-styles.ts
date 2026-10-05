@@ -59,6 +59,9 @@ export const REPORT_CSS = `
   font-size:34px;font-weight:700;line-height:1;letter-spacing:-.02em;color:var(--reticle-c-active);}
 [${REPORT_PANEL_ATTR}] .reticle-report-hero-label{color:var(--reticle-muted);font-size:11.5px;}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdicts{display:flex;gap:6px;margin-bottom:12px;}
+[${REPORT_PANEL_ATTR}] .reticle-report-coverage{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-bottom:12px;padding:8px 10px;border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-sm,8px);}
+[${REPORT_PANEL_ATTR}] .reticle-report-coverage-value{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--reticle-hud-text);}
+[${REPORT_PANEL_ATTR}] .reticle-report-coverage-levels{display:flex;flex-wrap:wrap;gap:4px 10px;width:100%;font-size:11px;color:var(--reticle-faint);font-variant-numeric:tabular-nums;}
 [${REPORT_PANEL_ATTR}] .reticle-report-verdict{
   flex:1;padding:5px 8px;border-radius:8px;font-size:10.5px;text-align:center;
   background:rgba(255,255,255,.05);color:var(--reticle-muted);}

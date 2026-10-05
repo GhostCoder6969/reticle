@@ -36,6 +36,7 @@ let storeOpts: {
   now?: () => number;
   config?: ConfigSource;
   configForRoot?: (root: string) => ConfigSource;
+  coverageForRoot?: (root: string) => () => Record<string, number> | undefined;
   globalRoot?: string;
   sdkVersion?: string;
 } = {};
@@ -46,10 +47,11 @@ function storeFor(root: string | undefined): ImpactStore | undefined {
   if (key === undefined || 0 === key.length) return undefined;
   let found = stores.get(key);
   if (found === undefined) {
-    const { configForRoot, ...opts } = storeOpts;
+    const { configForRoot, coverageForRoot, ...opts } = storeOpts;
     found = new ImpactStore({
       ...opts,
       ...(configForRoot === undefined ? {} : { config: configForRoot(key) }),
+      ...(coverageForRoot === undefined ? {} : { coverage: coverageForRoot(key) }),
       reticleRoot: key,
     });
     stores.set(key, found);
@@ -74,6 +76,8 @@ export function initImpact(opts: {
   config?: ConfigSource;
   /** Resolve credentials per project when one daemon serves multiple linked apps. */
   configForRoot?: (root: string) => ConfigSource;
+  /** Reticle Coverage for a project root, supplied by the daemon (the ledger is a feature's). */
+  coverageForRoot?: (root: string) => () => Record<string, number> | undefined;
   reticleRoot: string | undefined;
   projectName?: string;
   now?: () => number;
@@ -87,7 +91,8 @@ export function initImpact(opts: {
   if (opts.reticleRoot === undefined || 0 === opts.reticleRoot.length) return storeFor(undefined);
   if (defaultRoot === undefined) {
     defaultRoot = opts.reticleRoot;
-    const { projectName, now, config, configForRoot, globalRoot, sdkVersion } = opts;
+    const { projectName, now, config, configForRoot, coverageForRoot, globalRoot, sdkVersion } =
+      opts;
     storeOpts = {
       ...(projectName === undefined ? {} : { projectName }),
       ...(now === undefined ? {} : { now }),
@@ -95,6 +100,7 @@ export function initImpact(opts: {
       ...(sdkVersion === undefined ? {} : { sdkVersion }),
       ...(config === undefined ? {} : { config }),
       ...(configForRoot === undefined ? {} : { configForRoot }),
+      ...(coverageForRoot === undefined ? {} : { coverageForRoot }),
     };
   }
   return storeFor(opts.reticleRoot);

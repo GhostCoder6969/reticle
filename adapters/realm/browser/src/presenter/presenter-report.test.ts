@@ -526,3 +526,28 @@ describe('a snapshot from the daemon, painted', () => {
     expect(body).toContain('Sign in');
   });
 });
+
+// Reticle Coverage on the Impact page: numbers from the project's ledger, never text from it.
+describe('Reticle Coverage on the Impact page', () => {
+  const COVERAGE_SCOPE = scope({ calls: 3, verdicts: 2, passed: 2 });
+  it('leads with controls proved and lists the measured levels', () => {
+    const html = reportBodyHtml(COVERAGE_SCOPE, undefined, undefined, undefined, {
+      reached: 80,
+      proved: 41.6,
+      executed: 12,
+    });
+    expect(html).toContain('Reticle Coverage');
+    expect(html).toContain('<span class="reticle-report-coverage-value">42%</span>');
+    expect(html).toContain('80% routes reached');
+    expect(html).toContain('12% code executed');
+  });
+
+  it('renders nothing for an unmeasured project, and never a key it does not know', () => {
+    expect(reportBodyHtml(COVERAGE_SCOPE)).not.toContain('Reticle Coverage');
+    const html = reportBodyHtml(COVERAGE_SCOPE, undefined, undefined, undefined, {
+      '<img src=x>': 5,
+    });
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('Reticle Coverage');
+  });
+});
