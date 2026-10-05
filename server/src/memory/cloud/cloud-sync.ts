@@ -125,6 +125,20 @@ export async function cloudFetch(
   }
 }
 
+/**
+ * One sync request, status and body, under the same timeout every cloud call has. The sync daemon
+ * and `reticle sync` each called a bare `fetch`: one accepted-but-silent connection left the daemon's
+ * cycle running forever, and the dashboard stopped updating with nothing logged.
+ */
+export async function syncRequest(
+  url: string,
+  init: { method: string; headers: Record<string, string>; body?: string },
+  timeoutMs: number = CLOUD_FETCH_TIMEOUT_MS,
+): Promise<{ status: number; text: string }> {
+  const res = await cloudFetch(url, init, timeoutMs);
+  return { status: res.status, text: await res.text() };
+}
+
 export const SyncOutcome = {
   SYNCED: 'synced',
   SKIPPED: 'skipped',

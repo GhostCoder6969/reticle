@@ -273,6 +273,10 @@ const FLOW_VERSION_FIX = 'update the platform or remove `compare` from the flow'
 const RUN_VERSION_FIX = 'update the platform';
 
 /** The server's per-part answer: accepted count and rejection list, each read defensively. */
+/** A 200 that never confirmed the runs it was sent. Kept queued, and said, rather than dropped. */
+export const MSG_RUNS_UNCONFIRMED =
+  'sync 200 without a runs result: the server did not confirm the runs it was sent, so they stay queued';
+
 function partResult(body: Record<string, unknown>, part: string) {
   const raw = isRecord(body[part]) ? body[part] : {};
   const accepted = 'number' === typeof raw['accepted'] ? raw['accepted'] : 0;
@@ -543,6 +547,13 @@ export async function runSyncCycle(deps: SyncDeps): Promise<SyncReport> {
         break;
       }
       const answer = isRecord(pushed.json) ? pushed.json : {};
+      // Runs were sent and the answer says nothing about them: a proxy's 200 page, an empty body.
+      // Delivered means the server said so. Recording them as sent here dropped them for good while
+      // the cycle reported ok; they stay queued, and the reason is the cycle's error.
+      if (batch.length > 0 && !isRecord(answer['runs'])) {
+        pushError = MSG_RUNS_UNCONFIRMED;
+        break;
+      }
       const runs = partResult(answer, 'runs');
       runsSent += runs.accepted;
       // Accepted means the server has it. A rejected run was refused by index, so it is exactly as

@@ -33,6 +33,7 @@ import {
   readSessionFor,
   RETICLE_DIR,
 } from './cloud-kit.js';
+import { syncRequest } from '@/memory/cloud/cloud-sync.js';
 import { describeSync, runSyncCycle } from '@/memory/cloud/sync-cycle.js';
 import { diskSink, diskSource, readCloudIssues, readCloudState } from '@/memory/cloud/sync-disk.js';
 
@@ -631,10 +632,7 @@ const cmdSync = async (argv: readonly string[]): Promise<number> => {
       sink: diskSink(reticleRoot),
       state: readCloudState(reticleRoot),
       now: () => Date.now(),
-      request: async (url, init) => {
-        const res = await fetch(url, init);
-        return { status: res.status, text: await res.text() };
-      },
+      request: (url, init) => syncRequest(url, init),
     });
     emit({
       ok: report.ok,
