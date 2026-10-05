@@ -22,6 +22,8 @@ import {
 import { resolveSuiteSelection } from '@/language/flows/suite-selection.js';
 import { projectOnly } from '@/memory/project/session-root.js';
 import {
+  configuredPairingToken,
+  nodePairingTokenDeps,
   readOrCreatePairingTokenSync,
   defaultPairingTokenDir,
 } from '@/portal/bridge/pairing-token.js';
@@ -390,17 +392,19 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
   const envPort = Number(process.env[ReticleEnv.PORT]);
   const port = Number.isFinite(envPort) && envPort > 0 ? envPort : opts.port;
   const { origin, loopback } = urlParts(opts.url);
-  const pairing = loopback
-    ? {}
-    : (() => {
-        const token = randomUUID();
-        const bridgeUrl = bridgeWsUrl(port);
-        return {
+  // The configured token when there is one: an app in a container presents the one in the shared
+  // token directory, and a fresh one-shot token refused it (#1251).
+  const token = loopback
+    ? undefined
+    : ((await configuredPairingToken(process.env, nodePairingTokenDeps())) ?? randomUUID());
+  const pairing =
+    token === undefined
+      ? {}
+      : {
           token,
-          injectConnect: { token, url: bridgeUrl },
+          injectConnect: { token, url: bridgeWsUrl(port) },
           ...(origin !== undefined ? { allowedOrigins: [origin] } : {}),
         };
-      })();
   const running = await start({
     port,
     driveUrl: opts.url,
