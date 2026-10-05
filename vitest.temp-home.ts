@@ -11,6 +11,10 @@
  *
  * Runs before each test file's imports, so module-level `join(homedir(), …)` constants see it too.
  * One directory per worker process, reused across that worker's files.
+ *
+ * Process pools only. Under a THREAD pool (`threads`, `vmThreads`) a worker's `process.env` is its own
+ * copy and `os.homedir()` still reads the real one, so this cannot redirect it there. The two
+ * packages on thread pools, browser and react, never resolve a home directory in their source.
  */
 import { mkdtempSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
