@@ -134,6 +134,26 @@ function isNextDay(a: string, b: string): boolean {
 }
 
 /**
+ * Consecutive days ending at the newest recorded day, read from the days themselves.
+ *
+ * It was a counter bumped when a fold opened a new day and compared only with the bucket before it,
+ * so one stray day in between (a late flush from another daemon, a writer with a frozen clock) reset
+ * it to 1. Counting back from the newest date means no out-of-order write can shorten it.
+ */
+function streakEndingAtLatest(sortedDates: readonly string[]): number {
+  let streak = 0;
+  let later: string | undefined;
+  for (let i = sortedDates.length - 1; i >= 0; i -= 1) {
+    const date = sortedDates[i];
+    if (date === undefined) break;
+    if (later !== undefined && !isNextDay(date, later)) break;
+    streak += 1;
+    later = date;
+  }
+  return streak;
+}
+
+/**
  * What a fold knows beyond the counters.
  *
  * `runMs` is a SESSION's lifetime, and it only ever feeds the "longest run" record. It is not a
@@ -159,27 +179,23 @@ export function applyDelta(
 ): ImpactScope {
   const today = isoDay(now);
   const counts = addImpactCounts(scope.counts, delta);
-  const days = scope.days.slice();
-  const last = days[days.length - 1];
-  if (last !== undefined && last.date === today) {
-    days[days.length - 1] = { date: today, counts: addImpactCounts(last.counts, delta) };
-  } else {
-    days.push({ date: today, counts: addImpactCounts(emptyImpactCounts(), delta) });
+  // One bucket per date, wherever the delta's date falls. The machine-wide record has many writers
+  // and a late flush carries an older date, so "the last bucket is today" is not something a fold
+  // may assume — appending on that assumption duplicated dates and put them out of order.
+  const byDate = new Map<string, ImpactCounts>();
+  for (const day of scope.days) {
+    byDate.set(day.date, addImpactCounts(byDate.get(day.date) ?? emptyImpactCounts(), day.counts));
   }
+  const todayCounts = addImpactCounts(byDate.get(today) ?? emptyImpactCounts(), delta);
+  byDate.set(today, todayCounts);
+  const dates = [...byDate.keys()].sort();
+  const days = dates.map((date) => ({ date, counts: byDate.get(date) ?? emptyImpactCounts() }));
   while (days.length > IMPACT_DAILY_BUCKETS) days.shift();
 
-  const todayCounts = days[days.length - 1]?.counts ?? emptyImpactCounts();
-  const previousDay = days[days.length - 2];
   const records = { ...scope.records };
   records.bestVerdictDay = Math.max(records.bestVerdictDay, todayCounts.verdicts);
   records.bestDefectDay = Math.max(records.bestDefectDay, todayCounts.failed);
-  if (last === undefined || last.date !== today) {
-    // A new day joins the streak only if it follows yesterday; otherwise it starts a new one.
-    records.streakDays =
-      previousDay !== undefined && isNextDay(previousDay.date, today) ? records.streakDays + 1 : 1;
-  } else if (0 === records.streakDays) {
-    records.streakDays = 1;
-  }
+  records.streakDays = streakEndingAtLatest(dates);
   records.bestStreakDays = Math.max(records.bestStreakDays, records.streakDays);
   records.longestRunMs = Math.max(records.longestRunMs, meta.runMs ?? 0);
 

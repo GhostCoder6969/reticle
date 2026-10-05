@@ -51,10 +51,33 @@ describe('the impact record', () => {
     expect(scope.records.bestStreakDays, 'the best is remembered').toBe(2);
   });
 
+  /**
+   * The machine-wide record is shared by every daemon on the box and was also written by test runs
+   * with a frozen clock, so its days arrived out of order: `10-03, 1970-01-01, 10-03, …, 10-05`. The
+   * streak was a counter that only compared the newest bucket with the one before it, so any stray
+   * day in between reset it to 1 — the machine view read "1 day streak" no matter what.
+   */
+  it('keeps a streak across days that arrive out of order', () => {
+    const day1 = Date.parse('2026-10-03T10:00:00');
+    let scope = applyDelta(scopeAt(day1), { calls: 1 }, day1);
+    scope = applyDelta(scope, { calls: 1 }, 5_000); // a writer with a frozen clock
+    scope = applyDelta(scope, { calls: 1 }, day1 + DAY);
+    scope = applyDelta(scope, { calls: 1 }, day1); // an older delta flushed late by another daemon
+    scope = applyDelta(scope, { calls: 1 }, day1 + DAY * 2);
+    expect(scope.records.streakDays).toBe(3);
+    // One bucket per day, oldest first, so the next fold and the 30-day chart read the same thing.
+    const dates = scope.days.map((d) => d.date);
+    expect(dates).toEqual([...new Set(dates)].sort());
+    expect(scope.days.find((d) => d.date === isoDay(day1))?.counts.calls).toBe(2);
+  });
+
   it('writes both scopes atomically and reads them back', () => {
     const root = mkdtempSync(join(tmpdir(), 'impact-project-'));
+    // Its own home: without `globalRoot` this flush wrote a 1970 day into the developer's real
+    // ~/.reticle/impact.json on every test run, which is what kept the machine streak at 1.
     const store = new ImpactStore({
       reticleRoot: join(root, '.reticle'),
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-home-')),
       projectName: 'demo',
       now: () => 5_000,
     });
