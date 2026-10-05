@@ -44,6 +44,8 @@ export const HudUseDataSchema = z.object({
   toggle: z.nativeEnum(HudToggle).optional(),
   view: z.nativeEnum(HudView).optional(),
   panel: z.nativeEnum(HudPanel).optional(),
+  /** A rail slide that became the visible one. Its shape is checked where it is counted. */
+  slide: z.string().max(56).optional(),
 });
 export type HudUseData = z.infer<typeof HudUseDataSchema>;
 

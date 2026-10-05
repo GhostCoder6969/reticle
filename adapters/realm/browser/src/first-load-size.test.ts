@@ -304,7 +304,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * Raised by 1,000 over the measurement (247,238), rounded down to the hundred, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 248_300;
+const MAX_FIRST_LOAD_BYTES = 248_400;
+/*
+ * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
+ * string, its shape checked in the daemon where it is counted, as control ids already are. The
+ * impact snapshot's loose `coverage` record is in the same measurement.
+ */
 /*
  * Raised 248_200 -> 248_300 for the HUD's per-page time: `HudPanel` gained `flows` and `notes`, the
  * two pages that open inside the Agent Log. The enum is in the wire schema that validates every
