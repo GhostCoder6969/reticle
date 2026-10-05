@@ -216,6 +216,8 @@ export const HarnessConfigSchema = z.object({
   harnessEnabled: z.boolean(),
   /** Whether this workspace may drive on OUR model spend. Never folded into the switch. */
   harnessEntitled: z.boolean(),
+  /** Whether the selected provider has a usable platform key. Older daemons may omit it. */
+  providerReady: z.boolean().optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 

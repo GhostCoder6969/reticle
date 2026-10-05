@@ -31,7 +31,13 @@ const stores = new Map<string, ImpactStore>();
 /** The daemon's own root — used when a call cannot say which project it was for. */
 let defaultRoot: string | undefined;
 /** Held so a per-root store is built with the same clock and project name as the default. */
-let storeOpts: { projectName?: string; now?: () => number; config?: ConfigSource } = {};
+let storeOpts: {
+  projectName?: string;
+  now?: () => number;
+  config?: ConfigSource;
+  configForRoot?: (root: string) => ConfigSource;
+  globalRoot?: string;
+} = {};
 
 /** Get-or-create the store for one root. */
 function storeFor(root: string | undefined): ImpactStore | undefined {
@@ -39,7 +45,12 @@ function storeFor(root: string | undefined): ImpactStore | undefined {
   if (key === undefined || 0 === key.length) return undefined;
   let found = stores.get(key);
   if (found === undefined) {
-    found = new ImpactStore({ ...storeOpts, reticleRoot: key });
+    const { configForRoot, ...opts } = storeOpts;
+    found = new ImpactStore({
+      ...opts,
+      ...(configForRoot === undefined ? {} : { config: configForRoot(key) }),
+      reticleRoot: key,
+    });
     stores.set(key, found);
   }
   return found;
@@ -60,20 +71,26 @@ export function initImpact(opts: {
    * directory may not reach for it. The daemon owns both sides.
    */
   config?: ConfigSource;
+  /** Resolve credentials per project when one daemon serves multiple linked apps. */
+  configForRoot?: (root: string) => ConfigSource;
   reticleRoot: string | undefined;
   projectName?: string;
   now?: () => number;
+  /** Where the machine-wide `~/.reticle` lives. Tests pass a temp dir so they never write the real one. */
+  globalRoot?: string;
 }): ImpactStore | undefined {
   // No root, no record. Programmatic callers and test doubles build their own deps and are not
   // obliged to carry one, and a courtesy counter must never be the reason a tool call throws.
   if (opts.reticleRoot === undefined || 0 === opts.reticleRoot.length) return storeFor(undefined);
   if (defaultRoot === undefined) {
     defaultRoot = opts.reticleRoot;
-    const { projectName, now, config } = opts;
+    const { projectName, now, config, configForRoot, globalRoot } = opts;
     storeOpts = {
       ...(projectName === undefined ? {} : { projectName }),
       ...(now === undefined ? {} : { now }),
+      ...(globalRoot === undefined ? {} : { globalRoot }),
       ...(config === undefined ? {} : { config }),
+      ...(configForRoot === undefined ? {} : { configForRoot }),
     };
   }
   return storeFor(opts.reticleRoot);

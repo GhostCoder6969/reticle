@@ -434,7 +434,7 @@ export class Reticle {
         onMark: (mark) =>
           this.#presenter?.log(
             LOG_KIND.HUMAN,
-            `🚩 #${String(mark.index)} ${mark.anchor}${mark.source !== undefined ? ` · ${mark.source}` : ''} — ${mark.note}`,
+            `🚩 #${String(mark.index)} ${mark.label}${mark.source !== undefined ? ` · ${mark.source}` : ''} — ${mark.note}`,
           ),
         // The panel may not have arrived yet. `true` is what the panel's own settings start at,
         // so the answer does not change when it does.

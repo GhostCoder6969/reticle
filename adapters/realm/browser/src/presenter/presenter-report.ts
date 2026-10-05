@@ -34,6 +34,7 @@ import {
  */
 
 const SCOPE_ATTR = 'data-reticle-report-scope';
+const SCOPE = { PROJECT: 'project', MACHINE: 'machine' } as const;
 const SHARE_X_ATTR = 'data-reticle-share-x';
 const SHARE_IN_ATTR = 'data-reticle-share-in';
 const SHARE_COPY_ATTR = 'data-reticle-share-copy';
@@ -46,7 +47,7 @@ export function reportPanelHtml(): string {
     <div class="reticle-report-inner">
       <div class="reticle-report-head">
         <span class="reticle-report-title">${REPORT_TEXT.TITLE}</span>
-        <button type="button" ${SCOPE_ATTR} class="reticle-report-scope" aria-pressed="false">${REPORT_TEXT.PROJECT}</button>
+        <span class="reticle-segmented reticle-report-scopes" role="group" aria-label="${REPORT_TEXT.SCOPE_LABEL}"><button type="button" ${SCOPE_ATTR}="${SCOPE.PROJECT}" aria-pressed="true">${REPORT_TEXT.PROJECT}</button><button type="button" ${SCOPE_ATTR}="${SCOPE.MACHINE}" aria-pressed="false" title="${REPORT_TEXT.GLOBAL_TITLE}">${REPORT_TEXT.GLOBAL}</button></span>
         <button type="button" ${REPORT_CLOSE_ATTR} class="reticle-report-close" title="Close" aria-label="Close impact">${close}</button>
       </div>
       <div class="reticle-report-body" data-reticle-report-body></div>
@@ -221,7 +222,7 @@ export function reportBodyHtml(
    * will not find. The two never both render — `localOnly` is gated on there being NO dashboard.
    */
   const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}</div>`;
-  return `${identity}${streak}${hero}${verdicts}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
+  return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
 /**
@@ -289,14 +290,19 @@ export class PresenterReport {
       e.stopPropagation();
       this.close();
     });
-    const scopeBtn = root.querySelector(`[${SCOPE_ATTR}]`);
-    scopeBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.#global = !this.#global;
-      scopeBtn.setAttribute('aria-pressed', this.#global ? 'true' : 'false');
-      scopeBtn.textContent = this.#global ? REPORT_TEXT.GLOBAL : REPORT_TEXT.PROJECT;
-      this.#paint();
-    });
+    // Two choices, both always visible, the current one pressed. A single pill that rewrote its own
+    // label read as a tag rather than a switch, and never said what the other choice was.
+    const scopeBtns = root.querySelectorAll<HTMLElement>(`[${SCOPE_ATTR}]`);
+    for (const btn of scopeBtns) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.#global = SCOPE.MACHINE === btn.getAttribute(SCOPE_ATTR);
+        for (const other of scopeBtns) {
+          other.setAttribute('aria-pressed', other === btn ? 'true' : 'false');
+        }
+        this.#paint();
+      });
+    }
     root.querySelector(`[${SHARE_X_ATTR}]`)?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.#openShare(buildXShareUrl(this.shareText()));

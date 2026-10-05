@@ -331,7 +331,7 @@ export class Bridge {
   #onSessionEnd: ((session: Session) => Promise<void>) | undefined;
   /** Wired by the daemon: push to the dashboard now, because somebody asked in the panel. */
   #onSyncRequest: (() => void) | undefined;
-  #onHarnessRequest: ((enabled: boolean) => void) | undefined;
+  #onHarnessRequest: ((enabled: boolean, session: Session) => void) | undefined;
 
   constructor(options: BridgeOptions) {
     const host = options.host ?? LOOPBACK_HOST;
@@ -759,7 +759,7 @@ export class Bridge {
           else if (isSyncRequest(parsed.event)) this.#onSyncRequest?.();
           // The switch is written through to the platform by the daemon, for the same reason: the
           // Session has no cloud credential and should not grow one.
-          else if (harness !== undefined) this.#onHarnessRequest?.(harness);
+          else if (harness !== undefined) this.#onHarnessRequest?.(harness, session);
           // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
           else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
         } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
@@ -900,7 +900,7 @@ export class Bridge {
    * Register a handler for the panel's harness switch. Optional for the same reason as the above: a
    * bridge built without one ignores the request rather than refusing it.
    */
-  attachHarnessRequest(handler: (enabled: boolean) => void): void {
+  attachHarnessRequest(handler: (enabled: boolean, session: Session) => void): void {
     this.#onHarnessRequest = handler;
   }
 

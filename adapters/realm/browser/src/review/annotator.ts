@@ -4,6 +4,7 @@ import { isReticleUi, isReticleOverlay } from '@/dom/dom-ignore.js';
 import { resolveMarkAnchor, type MarkAnchor } from './mark-anchor.js';
 import { marksCountText, marksForAgent } from './marks-for-agent.js';
 import { nativeSetTimeout, nativeClearTimeout } from '@/timers/native/native-timers.js';
+import type { MarkForAgent } from './marks-for-agent.js';
 import {
   ANNOTATOR_CSS,
   ANNOTATOR_ROOT_HTML,
@@ -57,10 +58,18 @@ export interface AnnotatorChrome {
   countEl?: HTMLElement;
   /** Told the count whenever it changes, so the HUD can bring the copy row into view. */
   onCount?: (count: number) => void;
+  /** Current notes for the dedicated HUD view. Called after add, edit, and clear. */
+  onMarksChange?: (marks: readonly AnnotationItem[]) => void;
+}
+
+export interface AnnotationItem extends MarkForAgent {
+  id: string;
+  createdAt: number;
 }
 
 interface StoredMark {
   id: string;
+  createdAt: number;
   note: string;
   label: string;
   anchor: string;
@@ -98,6 +107,7 @@ export class Annotator {
   #clearBtn: HTMLElement | undefined;
   #copyRow: HTMLElement | undefined;
   #onChromeCount: ((count: number) => void) | undefined;
+  #onMarksChange: ((marks: readonly AnnotationItem[]) => void) | undefined;
   #countEl: HTMLElement | undefined;
   #accent: string | undefined;
   #ac: AbortController | undefined;
@@ -117,6 +127,18 @@ export class Annotator {
 
   get markCount(): number {
     return this.#marks.length;
+  }
+
+  annotations(): AnnotationItem[] {
+    return this.#marks.map(({ id, createdAt, note, label, anchor, route, source }) => ({
+      id,
+      createdAt,
+      note,
+      label,
+      anchor,
+      route,
+      ...(source === undefined ? {} : { source }),
+    }));
   }
 
   mount(): void {
@@ -168,6 +190,7 @@ export class Annotator {
     this.#clearBtn = chrome.clearBtn;
     this.#copyRow = chrome.copyRow;
     this.#onChromeCount = chrome.onCount;
+    this.#onMarksChange = chrome.onMarksChange;
     this.#countEl = chrome.countEl;
     this.#markersBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -253,6 +276,7 @@ export class Annotator {
     }
     this.#clearBtn?.toggleAttribute('disabled', 0 === n);
     this.#onChromeCount?.(n);
+    this.#onMarksChange?.(this.annotations());
     if (this.#copyRow !== undefined) {
       this.#copyRow.hidden = 0 === n;
       const text = this.#copyRow.querySelector('[data-reticle-marks-text]');
@@ -497,6 +521,7 @@ export class Annotator {
         this.#marks.indexOf(editing) + 1,
         editing.source,
       );
+      this.#syncChrome();
       this.#closePopover();
       return;
     }
@@ -575,8 +600,10 @@ export class Annotator {
     pin.style.left = `${String((x / window.innerWidth) * 100)}%`;
     pin.style.top = `${String(isFixed ? y : yDoc - window.scrollY)}px`;
     this.#root.appendChild(pin);
+    const createdAt = this.#now();
     const mark: StoredMark = {
-      id: `${resolved.anchor}:${String(this.#now())}:${String(n)}`,
+      id: `${resolved.anchor}:${String(createdAt)}:${String(n)}`,
+      createdAt,
       note,
       label: resolved.label,
       anchor: resolved.anchor,

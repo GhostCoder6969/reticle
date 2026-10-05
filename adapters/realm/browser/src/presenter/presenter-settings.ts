@@ -244,6 +244,8 @@ function settingsCheckRow(key: string, label: string, checked: boolean): string 
 /** Where the account state lands. Filled from a snapshot, like the workspace capsule. */
 export const SETTINGS_ACCOUNT_ATTR = 'data-reticle-settings-account';
 const SETTINGS_ACCOUNT_ROW_ATTR = 'data-reticle-settings-account-row';
+/** The help sentence a (?) click shows under its row. */
+const HELP_TEXT_ATTR = 'data-reticle-settings-helptext';
 /** The harness row, hidden until the platform has actually said something about it. */
 const SETTINGS_HARNESS_ROW_ATTR = 'data-reticle-settings-harness-row';
 const HARNESS_HELP =
@@ -351,9 +353,9 @@ export function settingsPanelHtml(): string {
         <div class="reticle-settings-section">Inspector</div>
         ${settingsToggleRow('reactComponents', 'React Components', reactHelp, 'data-reticle-settings-react-row')}
         <div class="reticle-settings-section">Interaction</div>
-        ${settingsCheckRow('blockPageInteractions', 'Block page interactions', true)}
-        ${settingsCheckRow('clearOnCopy', 'Clear on copy/send', false)}
-        ${settingsToggleRow('hideUntilRestart', 'Hide Until Restart', hideHelp)}
+        ${settingsCheckRow('blockPageInteractions', 'Block page while adding notes', true)}
+        ${settingsCheckRow('clearOnCopy', 'Clear notes after copying', false)}
+        ${settingsToggleRow('hideUntilRestart', 'Hide until reload', hideHelp)}
         ${settingsToggleRow('harnessEnabled', 'Autonomous driving', harnessHelp, `${SETTINGS_HARNESS_ROW_ATTR} hidden`)}
         ${settingsToggleRow('reduceMotion', 'Reduce motion', motionHelp)}
         <div class="reticle-settings-section">Account</div>
@@ -364,12 +366,13 @@ export function settingsPanelHtml(): string {
         <div class="reticle-settings-section">Status theme</div>
         ${settingsToggleRow('ambientGlow', 'Page glow', glowHelp)}
         <div class="reticle-settings-themes" data-reticle-settings-themes></div>
-      </div>
-      <div class="reticle-settings-foot">
+        <div class="reticle-settings-section">Help</div>
+        <div class="reticle-settings-foot">
         <button type="button" class="reticle-settings-reset" data-reticle-settings-reset>Reset HUD position</button>
-        <button type="button" class="reticle-settings-link" data-reticle-settings-mcp>Manage MCP &amp; Webhooks<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></button>
+        <button type="button" class="reticle-settings-link" data-reticle-settings-mcp>MCP setup guide<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></button>
         <a class="reticle-settings-link" data-reticle-feedback-email href="${FOUNDER_MAILTO}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.EMAIL_TITLE}">${FEEDBACK_TEXT.EMAIL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
         <a class="reticle-settings-link" data-reticle-feedback-call href="${DISCOVERY_CALL_URL}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.CALL_TITLE}">${FEEDBACK_TEXT.CALL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
+        </div>
       </div>
     </div>
   </div>`;
@@ -458,7 +461,8 @@ export class PresenterSettingsPanel {
       setHiIcon(this.#btn, PresenterIcon.GEAR, PRESENTER_ICON_SIZE.TOOLBAR);
       this.#btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.toggle();
+        // A tab selects its page, like the four beside it; the panel's × closes it.
+        this.open();
       });
     }
     root
@@ -469,9 +473,26 @@ export class PresenterSettingsPanel {
         const next = OUTPUT_DETAIL_OPTIONS[(idx + 1) % OUTPUT_DETAIL_OPTIONS.length];
         if (next !== undefined) this.#update({ outputDetail: next.value });
       });
-    for (const help of root.querySelectorAll('.reticle-settings-help')) {
+    // Help is a hover title for a mouse, and nothing at all for a touch or a click. A click shows
+    // the same sentence under its row, and a second click puts it away.
+    for (const help of root.querySelectorAll<HTMLElement>('.reticle-settings-help')) {
+      help.setAttribute('aria-expanded', 'false');
       help.addEventListener('click', (e) => {
         e.stopPropagation();
+        const row = help.closest('.reticle-settings-row');
+        if (null === row) return;
+        const shown = row.querySelector(`[${HELP_TEXT_ATTR}]`);
+        if (null !== shown) {
+          shown.remove();
+          help.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        const text = document.createElement('p');
+        text.className = 'reticle-settings-helptext';
+        text.setAttribute(HELP_TEXT_ATTR, '');
+        text.textContent = help.getAttribute('title') ?? '';
+        row.appendChild(text);
+        help.setAttribute('aria-expanded', 'true');
       });
     }
     for (const toggle of root.querySelectorAll(`[${SETTING_KEY_ATTR}]`)) {

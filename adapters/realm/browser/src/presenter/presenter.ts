@@ -66,6 +66,7 @@ import {
   CONTROLS_FLOWS_HTML,
   CONTROLS_MARKS_HTML,
   CONTROLS_FOOT_HTML,
+  CONTROLS_STATUS_HTML,
   ENDED_FADE_MS,
   ControlPanel,
   type ControlHandler,
@@ -179,6 +180,8 @@ export class Presenter {
       // The panel's sync button, onto the same browser→bridge channel the pause, resume and ▶
       // replay controls already use. A new control on an existing channel, not a new channel.
       onSyncNow: () => this.#onControl?.({ kind: HumanControlKind.SYNC }),
+      onHarness: (enabled) =>
+        this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
       settings: {
         onBeforeOpen: () => {
           if (this.#shell.isCollapsed()) this.#shell.expand();
@@ -232,6 +235,7 @@ export class Presenter {
         this.#shell.paintOffer(snapshot.harnessOffer);
         // Same snapshot, same moment: the switch cannot disagree with the card above it.
         this.#shell.paintHarness(snapshot.harnessConfig);
+        this.#shell.paintImpact(snapshot.project.counts.verdicts);
         this.#shell.paintAccount(snapshot.account, snapshot.dashboardUrl, {
           projectName: snapshot.projectName,
           dashboardUrl: snapshot.dashboardUrl,
@@ -266,13 +270,13 @@ export class Presenter {
     // A sibling BELOW the strip, hidden except while reading or acting, would pop a block into the
     // panel and take it away again on every tool call — which reads as a second UI flashing in rather
     // than as the one status line changing what it says.
-    const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act">${ACT_STRIP.READY}</span><span class="reticle-chip" data-reticle-chip></span></div>`;
+    const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act">${ACT_STRIP.READY}</span>${CONTROLS_BANNER_HTML}<span class="reticle-chip" data-reticle-chip></span><div class="reticle-act-actions">${CONTROLS_STATUS_HTML}</div></div>`;
     root.innerHTML = `
       ${blockerHtml()}
       <div data-reticle-glow></div>
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
-      ${HudShell.dockHtml(actStrip, CONTROLS_BANNER_HTML, DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
+      ${HudShell.dockHtml(actStrip, '', DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
     document.body.appendChild(root);
     this.#root = root;
     this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;
@@ -311,13 +315,14 @@ export class Presenter {
     const row = root.querySelector(`[${MARKS_ROW_ATTR}]`);
     const chrome: AnnotatorChrome = {};
     if (row instanceof HTMLElement) chrome.copyRow = row;
-    // The first note opens the chat, where the row saying what notes are for and how to hand them
-    // to an agent lives. Only the first: somebody who closes it again while marking is not argued with.
+    // The first note brings the Notes page forward, where the list, copy and clear live. It used to
+    // open the chat, which pulled somebody adding several notes off the page they were working in.
     let marks = annotator.markCount;
     chrome.onCount = (n) => {
-      if (0 === marks && n > 0) this.#shell.openChat();
+      if (0 === marks && n > 0) this.#shell.openView('annotations');
       marks = n;
     };
+    chrome.onMarksChange = (items) => this.#shell.paintAnnotations(items);
     if (copy instanceof HTMLElement) {
       copy.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -640,10 +645,9 @@ export class Presenter {
     } else {
       this.#renderTally();
     }
-    if (this.#root !== undefined) {
-      const live = SessionState.ACTIVE === this.#panel.state && !this.#shell.isCollapsed();
-      syncPageBlocker(this.#root, settings, live);
-    }
+    // The same rule as everywhere else, from the one place that states it: block only while notes are
+    // being added. Recomputing it here from session state blocked the app on any settings change.
+    this.#syncAnnotator();
   }
   /**
    * Append an activity-log row. Accumulates (never overwrites): each call adds a timestamped row

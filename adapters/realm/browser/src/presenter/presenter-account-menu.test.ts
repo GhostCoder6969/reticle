@@ -153,7 +153,44 @@ describe('opening and closing the menu', () => {
     const { root, teardown } = mounted(accountControlHtml(SIGNED_IN, { dashboardUrl: DASHBOARD }));
     const out = root.querySelector(`[${ACCOUNT_SIGNOUT_ATTR}]`);
     expect(out?.getAttribute('data-reticle-copy')).toBe(ACCOUNT_TEXT.SIGNOUT_COMMAND);
+    expect(out?.textContent).toContain('Copy sign-out command');
     teardown();
     root.remove();
+  });
+
+  it('confirms when the sign-out command reaches the clipboard', async () => {
+    const prior = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          expect(text).toBe(ACCOUNT_TEXT.SIGNOUT_COMMAND);
+          return Promise.resolve();
+        },
+      },
+    });
+    const { root, teardown } = mounted(accountControlHtml(SIGNED_IN, {}));
+    const out = root.querySelector<HTMLElement>(`[${ACCOUNT_SIGNOUT_ATTR}]`);
+    out?.click();
+    await Promise.resolve();
+    expect(out?.textContent).toBe(ACCOUNT_TEXT.COPIED);
+    teardown();
+    root.remove();
+    if (prior === undefined) Reflect.deleteProperty(navigator, 'clipboard');
+    else Object.defineProperty(navigator, 'clipboard', prior);
+  });
+
+  it('explains the terminal command if the clipboard is unavailable', async () => {
+    const prior = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    const { root, teardown } = mounted(accountControlHtml(SIGNED_IN, {}));
+    const out = root.querySelector<HTMLElement>(`[${ACCOUNT_SIGNOUT_ATTR}]`);
+    out?.click();
+    await Promise.resolve();
+    expect(out?.textContent).toBe(ACCOUNT_TEXT.SIGNOUT_COPY_FAILED);
+    teardown();
+    root.remove();
+    if (prior === undefined) Reflect.deleteProperty(navigator, 'clipboard');
+    else Object.defineProperty(navigator, 'clipboard', prior);
   });
 });

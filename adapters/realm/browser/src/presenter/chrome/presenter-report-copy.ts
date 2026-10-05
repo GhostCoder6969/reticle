@@ -35,7 +35,9 @@ const SHARE_VIA_HANDLE = '';
 export const REPORT_TEXT = {
   TITLE: 'Impact',
   PROJECT: 'This project',
-  GLOBAL: 'Everything on this machine',
+  GLOBAL: 'All projects',
+  GLOBAL_TITLE: 'Every project on this computer',
+  SCOPE_LABEL: 'Show impact for',
   /**
    * What `counts.failed` actually is: a verdict whose declared consequence did not hold.
    *

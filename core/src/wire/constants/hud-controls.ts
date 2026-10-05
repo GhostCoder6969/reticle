@@ -26,9 +26,15 @@ const PLAIN_CONTROLS = [
   'min-btn',
   'chat-min',
   'chat-pill',
+  'chat-impact',
+  'copy-all-notes',
+  'promo-link',
   'replay',
   'carousel-dot',
+  'carousel-prev',
+  'carousel-next',
   'carousel-close',
+  'page-close',
   'offer-claim',
   'talk-book',
   'account-signin',
@@ -62,6 +68,8 @@ export const HUD_KEYED_ATTRS = [
   'theme',
   'tour-target',
   'link',
+  'annotation-tab',
+  'chat-view-btn',
 ] as const;
 
 /** Controls whose id also carries a key Reticle authored (`data-reticle-setting="x"` -> `setting.x`). */
@@ -81,6 +89,8 @@ const KEYED_CONTROLS = {
   theme: ['signal', 'traffic', 'mono', 'neon', 'ember'],
   'tour-target': ['copy', 'back', 'done', 'next', 'skip'],
   link: ['docs', 'github', 'site', 'discord', 'defect', 'dashboard'],
+  'annotation-tab': ['current', 'history'],
+  'chat-view-btn': ['activity', 'flows', 'annotations'],
 } as const satisfies Record<(typeof HUD_KEYED_ATTRS)[number], readonly string[]>;
 
 let controls: ReadonlySet<string> | undefined;

@@ -55,9 +55,10 @@ export const ACCOUNT_TEXT = {
   /** Linking is a terminal step for the same reason signing in is: only the CLI can write the file. */
   LINK_HINT: 'Not linked — run `reticle link` to keep a record on the dashboard',
   LINK_COMMAND: 'reticle link',
-  SIGNOUT_ACTION: 'Sign out',
-  SIGNOUT_TITLE: 'Run `reticle logout` in your terminal — click to copy the command',
+  SIGNOUT_ACTION: 'Copy sign-out command',
+  SIGNOUT_TITLE: 'Copy `reticle logout` to run in your terminal',
   SIGNOUT_COMMAND: 'reticle logout',
+  SIGNOUT_COPY_FAILED: 'Run reticle logout in terminal',
   PROJECT_LABEL: 'Project',
   HOST_LABEL: 'Host',
   VERDICTS_LABEL: 'Verdicts',
@@ -250,13 +251,29 @@ export function mountAccountControl(root: HTMLElement): () => void {
   };
 
   /** Flash the control's own label, so the feedback is where the click was. */
-  const flashCopied = (el: HTMLElement): void => {
+  const flashLabel = (el: HTMLElement, value: string): void => {
     const label = el.querySelector('span') ?? el;
     const previous = label.textContent;
-    label.textContent = ACCOUNT_TEXT.COPIED;
+    label.textContent = value;
     setTimeout(() => {
       label.textContent = previous;
     }, ACCOUNT_COPIED_MS);
+  };
+
+  /** Clipboard can be absent or denied in an embedded page; never make that failure look like success. */
+  const copyCommand = async (command: string, el: HTMLElement): Promise<void> => {
+    try {
+      if (navigator.clipboard === undefined) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(command);
+      flashLabel(el, ACCOUNT_TEXT.COPIED);
+    } catch {
+      flashLabel(
+        el,
+        command === ACCOUNT_TEXT.SIGNOUT_COMMAND
+          ? ACCOUNT_TEXT.SIGNOUT_COPY_FAILED
+          : `Run ${command} in terminal`,
+      );
+    }
   };
 
   root.addEventListener(
@@ -289,8 +306,7 @@ export function mountAccountControl(root: HTMLElement): () => void {
         event.preventDefault();
         event.stopPropagation();
         const command = copier.getAttribute('data-reticle-copy') ?? '';
-        if (command.length > 0) void navigator.clipboard?.writeText(command).catch(() => undefined);
-        flashCopied(copier);
+        if (command.length > 0) void copyCommand(command, copier);
         return;
       }
 
@@ -300,8 +316,7 @@ export function mountAccountControl(root: HTMLElement): () => void {
       if (signin instanceof HTMLElement) {
         event.preventDefault();
         event.stopPropagation();
-        void navigator.clipboard?.writeText(ACCOUNT_TEXT.SIGNIN_COMMAND).catch(() => undefined);
-        flashCopied(signin);
+        void copyCommand(ACCOUNT_TEXT.SIGNIN_COMMAND, signin);
         return;
       }
 

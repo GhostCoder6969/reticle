@@ -76,7 +76,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // and a `promo/` directory holding exactly one file would be a category invented for a single member.
   // 20 since `hud-telemetry.ts`: the one listener that names every HUD press. It reads the presenter's
   // own root attributes and every surface's controls, so it sits with the surfaces it watches.
-  'adapters/realm/browser/src/presenter': 20,
+  'adapters/realm/browser/src/presenter': 23,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a

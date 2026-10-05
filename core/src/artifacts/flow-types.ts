@@ -893,6 +893,8 @@ export interface FlowChip {
   name: string;
   /** The testid the flow's first step anchors to, when it has one — the panel hides chips that cannot start on the current page. */
   start?: string;
+  /** Saved time, used to put recent flows first in the HUD. Older flow stores may omit it. */
+  createdAt?: number;
 }
 
 /** One recorded known bug, as stored on a flow. */
