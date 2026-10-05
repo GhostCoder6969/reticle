@@ -354,7 +354,7 @@ export class ChatViews {
     if (config === undefined) {
       spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Link project to enable driving</span></div><button type="button" role="switch" data-reticle-harness-switch class="reticle-harness-switch" aria-label="Reticle Harness autonomous driving" aria-checked="false" aria-disabled="true" disabled></button><a class="reticle-harness-link" href="${HARNESS_SETUP_URL}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
     } else if (!config.harnessEntitled) {
-      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>End-to-end verification with real-user personas, up to 20× faster</span></div><a class="reticle-harness-link" href="${HARNESS_PLAN_URL}" target="_blank" rel="noopener noreferrer">Explore Harness ↗</a></div>`;
+      spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Describe a user and Reticle drives the whole journey for you</span></div><a class="reticle-harness-link" href="${HARNESS_PLAN_URL}" target="_blank" rel="noopener noreferrer">Explore Harness ↗</a></div>`;
     } else if (false === config.providerReady) {
       spot.innerHTML = `<div class="reticle-harness-row"><div class="reticle-harness-copy"><strong>Reticle Harness</strong><span>Choose a model provider to start driving</span></div><a class="reticle-harness-link" href="${HARNESS_SETUP_URL}" target="_blank" rel="noopener noreferrer">Set up ↗</a></div>`;
     } else {

@@ -54,7 +54,7 @@ describe('chat views and harness access states', () => {
     views.paintAccount({ signedIn: true });
     views.paintHarness({ ...entitled, harnessEntitled: false });
     expect(root.textContent).toContain(
-      'End-to-end verification with real-user personas, up to 20× faster',
+      'Describe a user and Reticle drives the whole journey for you',
     );
     expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Explore Harness');
     // The console has no /harness page; it redirected to the home page. Harness needs a plan.

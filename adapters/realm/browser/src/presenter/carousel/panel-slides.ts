@@ -18,7 +18,7 @@ export const SLIDE_ID = {
 const VALUE_SLIDES: readonly Slide[] = [
   {
     id: SLIDE_ID.HARNESS,
-    html: `<div class="reticle-promo-copy"><span class="reticle-promo-kicker">RETICLE HARNESS</span><strong class="reticle-promo-title">End-to-end verification, 20× faster</strong><span class="reticle-promo-detail">Real personas. Deep coverage. Replay every flow.</span><a data-reticle-promo-link class="reticle-promo-link" href="${HARNESS_URL}" target="_blank" rel="noopener noreferrer">Explore →</a></div>`,
+    html: `<div class="reticle-promo-copy"><span class="reticle-promo-kicker">RETICLE HARNESS</span><strong class="reticle-promo-title">Let Reticle drive your app for you</strong><span class="reticle-promo-detail">Describe a user; it drives the journey and saves it to replay.</span><a data-reticle-promo-link class="reticle-promo-link" href="${HARNESS_URL}" target="_blank" rel="noopener noreferrer">Explore →</a></div>`,
   },
   {
     id: SLIDE_ID.REPLAY,

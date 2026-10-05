@@ -37,7 +37,8 @@ const PAGE_PANEL_ATTR = 'data-reticle-page-panel';
 const OVERLAY = 'data-reticle-overlay';
 
 export const RAIL_TEXT = {
-  TITLE: 'Sign in to unlock Reticle Harness',
+  // "Try", not "unlock": Harness comes with a plan or trial, and signing in alone grants nothing.
+  TITLE: 'Sign in to try Reticle Harness',
   DETAIL: 'Autonomous end-to-end checks on this app',
   CTA: 'Sign in',
 } as const;
