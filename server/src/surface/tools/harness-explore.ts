@@ -359,9 +359,20 @@ export const MSG_HARNESS_DISABLED =
  * who never turned anything off is a support ticket rather than an answer.
  */
 export const MSG_HARNESS_UNCLAIMED =
-  'This workspace has no harness entitlement, so autonomous driving would run on Reticle’s model ' +
-  'budget with nothing paying for it. Claim the free 3 months in the Reticle dashboard, or export a ' +
-  'model API key of your own and drive with that.';
+  'This workspace has no Harness plan, so autonomous driving would run on Reticle’s model budget ' +
+  'with nothing paying for it. Start a trial or plan in the Reticle dashboard (Settings → Billing), ' +
+  'or export a model API key of your own and drive with that.';
+
+/** The platform could not be asked, and the drive would spend Reticle's budget without its yes. */
+export const MSG_HARNESS_UNCONFIRMED =
+  'Could not confirm Harness access with the Reticle platform, so the drive did not start: it would ' +
+  'run on Reticle’s model budget unchecked. Try again in a moment, or export a model API key of ' +
+  'your own and drive with that.';
+
+/** The platform holds no key for this project's model, so a drive through it would fail mid-run. */
+export const MSG_HARNESS_NO_PROVIDER =
+  'The Reticle platform has no model ready for this project yet, so the drive did not start. Check ' +
+  'Settings → Projects → Verification in the dashboard, or export a model API key of your own.';
 
 /**
  * Whether a drive would be paid for by the person asking for it.
@@ -392,17 +403,14 @@ function platformConfig(env: Record<string, string | undefined>, options: Explor
 /**
  * The reason this drive must not start, or `undefined` to go ahead.
  *
- * It FAILS OPEN, and that is worth stating plainly because the argument for it changed under it.
- * `fetchPlatformConfig` answers `undefined` on a network error, a non-2xx, a body that does not
- * parse, or a two-second timeout, and all four land here as "carry on". When this endpoint only
- * answered "which model does this project prefer", failing open cost nothing: the drive used the
- * environment and nobody was worse off. It now also answers "is anybody paying for this", and the
- * same silence means a drive runs on Reticle's model budget unmetered.
- *
- * Kept open anyway, deliberately: a settings endpoint having a slow second must not break somebody
- * mid-verification, and the exposure is one drive's worth of a very cheap model. But this is
- * best-effort, not enforcement -- if the spend needs a hard floor, it belongs at the proxy, which
- * is the only side that cannot be talked out of it by a dropped packet.
+ * A drive on somebody's OWN model key never waits on the platform beyond the off switch: their key,
+ * their spend. A drive through the platform proxy bills Reticle, and that one needs a confirmed yes
+ * — enabled, entitled, and a model ready. It used to fail open: `fetchPlatformConfig` answers
+ * `undefined` on a network error, a non-2xx, a body that does not parse, or a two-second timeout,
+ * and all four read as "carry on", so a slow second on a settings endpoint let an unentitled
+ * workspace drive on Reticle's budget. Now the same silence refuses with a message that says to
+ * retry or bring a key. Fields an older platform omits still default to yes inside
+ * `fetchPlatformConfig`; only an answer that never arrived is a no.
  */
 async function refusedByPlatform(
   env: Record<string, string | undefined>,
@@ -410,9 +418,16 @@ async function refusedByPlatform(
 ): Promise<string | undefined> {
   if (true === options.skipPlatformConfig) return undefined;
   const config = await platformConfig(env, options);
-  if (config === undefined) return undefined;
-  if (!config.harnessEnabled) return MSG_HARNESS_DISABLED;
-  if (!config.harnessEntitled && !ownsAModelKey(env)) return MSG_HARNESS_UNCLAIMED;
+  if (config !== undefined && !config.harnessEnabled) return MSG_HARNESS_DISABLED;
+  // Their key, their spend: nothing below is any of our business.
+  if (ownsAModelKey(env)) return undefined;
+  // No platform key either: there is no budget to protect, and the driver says what is missing.
+  const platformKey = env[ReticleEnv.API_KEY];
+  if (platformKey === undefined || 0 === platformKey.length) return undefined;
+  // From here the drive bills Reticle, so it needs a confirmed yes, not the absence of a no.
+  if (config === undefined) return MSG_HARNESS_UNCONFIRMED;
+  if (!config.harnessEntitled) return MSG_HARNESS_UNCLAIMED;
+  if (!config.providerReady) return MSG_HARNESS_NO_PROVIDER;
   return undefined;
 }
 

@@ -22,3 +22,11 @@ export const DRIVER_NAMES = [ANTHROPIC_DRIVER_NAME, JEV_DRIVER_NAME, OPENAI_DRIV
 
 /** An injected driver: not selectable, because only a caller in-process can supply one. */
 export const CUSTOM_DRIVER_NAME = 'custom';
+
+/**
+ * What a drive needs, said once for every place that tells somebody. It used to say "needs
+ * ANTHROPIC_API_KEY" in three places after the platform proxy, Jev and OpenAI had all become ways in.
+ */
+export const EXPLORE_NEEDS =
+  'Needs a Reticle Harness plan on a linked project, or your own ANTHROPIC_API_KEY, JEV_API_KEY or ' +
+  'OPENAI_API_KEY in the daemon environment.';

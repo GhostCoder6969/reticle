@@ -21,6 +21,8 @@ import {
   MSG_NO_OPENAI_KEY,
   MSG_HARNESS_DISABLED,
   MSG_HARNESS_UNCLAIMED,
+  MSG_HARNESS_UNCONFIRMED,
+  MSG_HARNESS_NO_PROVIDER,
 } from './harness-explore.js';
 
 /** One completed flow-save call, as the loop records it. */
@@ -470,7 +472,7 @@ describe('a workspace with no entitlement', () => {
   });
   const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
 
-  it('is told to claim the free months rather than that something is switched off', async () => {
+  it('is told to start a plan or bring a key, never to claim an offer that does not exist', async () => {
     await expect(
       exploreApp(depsWithFlows([]), linked, {
         maxSteps: 1,
@@ -478,6 +480,10 @@ describe('a workspace with no entitlement', () => {
         configFetch: unentitled,
       }),
     ).rejects.toThrow(MSG_HARNESS_UNCLAIMED);
+    // The free offer is switched off on the platform and the console has no claim button, so the
+    // old "claim the free 3 months" sent people looking for something that is not there.
+    expect(MSG_HARNESS_UNCLAIMED).not.toMatch(/free 3 months|claim/i);
+    expect(MSG_HARNESS_UNCLAIMED).toContain('Settings → Billing');
   });
 
   /** Their key, their spend. Entitlement has no business stopping a drive that costs us nothing. */
@@ -490,6 +496,46 @@ describe('a workspace with no entitlement', () => {
     expect(result.drive).toBeDefined();
   });
 
+  /**
+   * The gate used to FAIL OPEN: a platform that was slow for two seconds, or down, let the drive
+   * run on Reticle's model budget with nobody's entitlement checked. A drive that would bill us
+   * needs a confirmed yes; a drive on somebody's own key never asks.
+   */
+  const unreachable = () => Promise.reject(new Error('ETIMEDOUT'));
+  it('refuses a drive on our budget when the platform cannot confirm it', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: unreachable,
+      }),
+    ).rejects.toThrow(MSG_HARNESS_UNCONFIRMED);
+  });
+
+  it('still drives on a key of their own when the platform cannot be reached', async () => {
+    const result = await exploreApp(
+      depsWithFlows([]),
+      { ...linked, [ReticleEnv.HARNESS_KEY]: 'sk-ant-own' },
+      { maxSteps: 1, driver: finishing(''), configFetch: unreachable },
+    );
+    expect(result.drive).toBeDefined();
+  });
+
+  it('refuses a drive on our budget when the platform says its model is not ready', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), linked, {
+        maxSteps: 1,
+        driver: finishing(''),
+        configFetch: platformSays({
+          provider: 'jev',
+          harnessEnabled: true,
+          harnessEntitled: true,
+          available: { jev: false },
+        }),
+      }),
+    ).rejects.toThrow(MSG_HARNESS_NO_PROVIDER);
+  });
+
   /** An older platform reports neither field; silence must not read as a refusal. */
   it('drives when the platform says nothing about entitlement', async () => {
     const result = await exploreApp(depsWithFlows([]), linked, {
@@ -498,5 +544,16 @@ describe('a workspace with no entitlement', () => {
       configFetch: platformSays({ provider: 'jev' }),
     });
     expect(result.drive).toBeDefined();
+  });
+});
+
+describe('what the explore tool says it needs', () => {
+  it('names every way in, not only the Anthropic key it once required', async () => {
+    const { EXPLORE_TOOLS } = await import('./explore-tools.js');
+    const { EXPLORE_NEEDS } = await import('@/features/harness/drivers.js');
+    const description = EXPLORE_TOOLS.map((t) => t.description).join(' ');
+    expect(description).toContain(EXPLORE_NEEDS);
+    expect(EXPLORE_NEEDS).toContain('Harness plan');
+    expect(EXPLORE_NEEDS).toContain('JEV_API_KEY');
   });
 });

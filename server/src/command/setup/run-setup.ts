@@ -568,7 +568,8 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   note(
     '  2. Or hand over the whole drive: `reticle_verify { action: "explore", persona: "<who does ' +
       'what>" }` records what it drove, so later runs replay with no model in the loop. Needs ' +
-      'ANTHROPIC_API_KEY.',
+      'a Reticle Harness plan on a linked project, or your own ANTHROPIC_API_KEY, JEV_API_KEY or ' +
+      'OPENAI_API_KEY.',
   );
   return {
     ok: true,
