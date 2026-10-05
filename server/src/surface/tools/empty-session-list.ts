@@ -46,9 +46,7 @@ export const EMPTY_SESSION_LIST_OUTPUT = {
   wired: z
     .record(z.unknown())
     .optional()
-    .describe(
-      'First run only: the files Reticle changed to wire the app (`steps`). Tell the user.',
-    ),
+    .describe('Files the first run changed (`steps`); tell the user.'),
   lastKnown: z
     .object({
       sessionId: z.string(),

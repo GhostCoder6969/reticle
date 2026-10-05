@@ -266,6 +266,8 @@ export const EnvelopeKey = {
   VERSION_SKEW: 'version_skew',
   /** A feedback report that was accepted and then failed to send. Only the reporter can act on it. */
   FEEDBACK_UNDELIVERED: 'feedback_undelivered',
+  /** Once per project: verified runs exist only on this machine. See platform-moment.ts. */
+  PLATFORM: 'platform',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

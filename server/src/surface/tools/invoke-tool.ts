@@ -1,4 +1,6 @@
 import { healthEnvelope } from '@/portal/session/session-health.js';
+import { sessionRoot } from '@/memory/project/session-root.js';
+import { takePlatformMoment } from './platform-moment.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
 import {
   type BrowserBrand,
@@ -651,12 +653,17 @@ export async function runTool<Ext>(
   // RETURN an error. So the denominator was counting a small, unrepresentative slice of the
   // invitations and reading near-empty, which looks identical to a nudge that never fires.
   const friction = frictionInviteFor(tool.name, raw);
+  // Once per project, on a proved verdict, when the runs live only on this machine.
+  const platform = isPlainObject(raw)
+    ? await takePlatformMoment(deps, raw, () => sessionRoot(deps, rawSessionId))
+    : undefined;
   const result =
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
     undelivered === undefined &&
-    friction === undefined
+    friction === undefined &&
+    platform === undefined
       ? raw
       : {
           ...(raw as object),
@@ -670,6 +677,7 @@ export async function runTool<Ext>(
           ...(prompt !== undefined ? { [EnvelopeKey.FEEDBACK_PROMPT]: prompt } : {}),
           ...(update !== undefined ? { [EnvelopeKey.UPDATE_AVAILABLE]: update } : {}),
           ...(skew !== undefined ? { [EnvelopeKey.VERSION_SKEW]: skew } : {}),
+          ...(platform !== undefined ? { [EnvelopeKey.PLATFORM]: platform } : {}),
           ...(undelivered !== undefined
             ? {
                 [EnvelopeKey.FEEDBACK_UNDELIVERED]: `your earlier report did NOT send: ${undelivered}. Tell the human what you found so it is not lost.`,
