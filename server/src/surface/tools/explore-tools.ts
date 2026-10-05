@@ -65,6 +65,10 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       savedFlows: z.array(z.string()),
       /** Flows that already existed and were driven and written again. A second run's ordinary result. */
       rewroteFlows: z.array(z.string()),
+      /** Saved flows with no step that asserts anything: their replay verifies nothing. */
+      unverifiedFlows: z.array(z.string()),
+      /** Whether the drive ran at least one check. A drive that did not proved nothing. */
+      proved: z.boolean(),
       /**
        * What the drive set out to do, read from `.reticle` BEFORE it started — every recorded
        * journey with the consequence that must still hold, and the declared intent nobody has
@@ -99,23 +103,26 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
       const driver = args['driver'];
-      const { drive, savedFlows, rewroteFlows, driverName, plan } = await exploreApp(deps, env, {
-        ...('string' === typeof persona ? { focus: persona } : {}),
-        ...('number' === typeof maxSteps ? { maxSteps } : {}),
-        ...('string' === typeof sessionId ? { sessionId } : {}),
-        ...('string' === typeof driver ? { driverName: driver } : {}),
-      });
+      const { drive, savedFlows, rewroteFlows, unverifiedFlows, driverName, plan } =
+        await exploreApp(deps, env, {
+          ...('string' === typeof persona ? { focus: persona } : {}),
+          ...('number' === typeof maxSteps ? { maxSteps } : {}),
+          ...('string' === typeof sessionId ? { sessionId } : {}),
+          ...('string' === typeof driver ? { driverName: driver } : {}),
+        });
       return {
         stopReason: drive.stopReason,
         driver: driverName,
         steps: drive.steps,
         savedFlows: [...savedFlows],
         rewroteFlows: [...rewroteFlows],
+        unverifiedFlows: [...unverifiedFlows],
+        proved: drive.proved,
         plan: { summary: plan.summary, steps: [...plan.steps] },
         // Derived, not narrated. The driver's own `summary` is appended only when it said
         // something — it is the one part of this a model authored, so it goes last and is labelled.
         summary: [
-          describeDrive(drive.toolCalls, [...savedFlows, ...rewroteFlows]),
+          describeDrive(drive.toolCalls, [...savedFlows, ...rewroteFlows], unverifiedFlows),
           ...(0 === drive.summary.length ? [] : [`The driver's own account: ${drive.summary}`]),
         ].join('\n'),
         ...(drive.error === undefined ? {} : { error: drive.error }),

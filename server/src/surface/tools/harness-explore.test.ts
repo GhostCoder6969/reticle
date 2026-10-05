@@ -15,6 +15,7 @@ import {
   reconcileFlows,
   knownDriver,
   openRecordingName,
+  bankedIntent,
   withLinkedCredential,
   MSG_NO_HARNESS_KEY,
   MSG_NO_JEV_KEY,
@@ -58,6 +59,72 @@ function finishing(summary: string): ModelDriver {
 }
 
 describe('exploring an app', () => {
+  /**
+   * The real drive this guards against saved `harness-drive-home`: one click, no `expect`, replayed
+   * as "verified nothing" while the drive reported it as saved work. A saved flow that checks
+   * nothing is named as such rather than counted as evidence.
+   */
+  it('names the saved flows that check nothing', async () => {
+    const steps: Record<string, unknown[]> = {
+      checkout: [{ action: 'click' }],
+      login: [{ action: 'click', expect: { kind: 'text', contains: 'Welcome' } }],
+    };
+    let call = 0;
+    const lists = [[], ['checkout', 'login']];
+    const deps = {
+      flows: {
+        list: () => Promise.resolve([...(lists[Math.min(call++, 1)] ?? [])]),
+        load: (name: string) =>
+          Promise.resolve({ ok: true, value: { name, steps: steps[name] ?? [] } }),
+      },
+    } as unknown as ToolDeps;
+    const result = await exploreApp(deps, {}, { driver: finishing(''), skipPlatformConfig: true });
+    expect(result.savedFlows).toEqual(['checkout', 'login']);
+    expect(result.unverifiedFlows).toEqual(['checkout']);
+  });
+
+  it('records the persona as the intent of a saved flow that has none, whoever saved it', async () => {
+    const files: Record<
+      string,
+      { name: string; intent?: string; projectId?: string; steps: unknown[] }
+    > = {
+      checkout: { name: 'checkout', projectId: 'shop', steps: [{ action: 'click' }] },
+      login: { name: 'login', intent: 'sign in works', steps: [] },
+    };
+    const saved: { name: string; intent?: string; project?: string | undefined }[] = [];
+    let call = 0;
+    const deps = {
+      flows: {
+        list: () => Promise.resolve(0 === call++ ? [] : ['checkout', 'login']),
+        load: (name: string) => Promise.resolve({ ok: true, value: files[name] }),
+        // The project rides along: without it the store writes a flat duplicate beside the original.
+        saveFlow: (flow: { name: string; intent?: string }, project?: string) => {
+          saved.push({ ...flow, project });
+          return Promise.resolve({ ok: true, value: {} });
+        },
+      },
+    } as unknown as ToolDeps;
+    await exploreApp(
+      deps,
+      {},
+      {
+        driver: finishing(''),
+        skipPlatformConfig: true,
+        focus: 'a visitor who clicks the counter twice',
+      },
+    );
+    expect(saved.map((f) => [f.name, f.intent, f.project])).toEqual([
+      ['checkout', 'a visitor who clicks the counter twice', 'shop'],
+    ]);
+  });
+
+  it('banks an open recording under the persona it was driving for', () => {
+    expect(bankedIntent('a returning customer checking out', 'harness-drive-home')).toBe(
+      'a returning customer checking out',
+    );
+    expect(bankedIntent(undefined, 'harness-drive-home')).toContain('harness-drive-home');
+  });
+
   it('reports the flows that now exist and did not before', async () => {
     const result = await exploreApp(
       depsWithFlows(['login'], ['login', 'checkout']),

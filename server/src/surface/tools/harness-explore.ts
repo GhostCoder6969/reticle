@@ -8,7 +8,7 @@
  * deterministically with no model in the loop at all.
  */
 
-import { ReticleEnv, ReticleTool, cloudUrlFrom, asRecord } from '@reticlehq/core';
+import { ReticleEnv, ReticleTool, asProjectId, cloudUrlFrom, asRecord } from '@reticlehq/core';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
 import {
@@ -88,6 +88,8 @@ export interface ExploreResult {
   plan: HarnessPlan;
   /** Flows that exist now and did not before — the part of a drive that is worth paying for twice. */
   savedFlows: readonly string[];
+  /** Of the saved and rewritten flows, the ones with no step that checks anything. */
+  unverifiedFlows: readonly string[];
   /**
    * Flows that already existed and were written again by this drive.
    *
@@ -260,10 +262,77 @@ export async function exploreApp(
   // breaks, or whose model simply stops asking for tools, leaves a recording open and everything it
   // drove unsaved — work paid for and thrown away. Saving is not a decision any model gets to make
   // and not something a step budget gets to cut off, so it happens here, after the loop, always.
-  await bankOpenRecording(toolset, drive);
+  await bankOpenRecording(toolset, drive, options.focus);
 
   const after = await deps.flows.list();
-  return { drive, plan, driverName: built.name, ...reconcileFlows(before, after, drive.toolCalls) };
+  const reconciled = reconcileFlows(before, after, drive.toolCalls);
+  if (options.focus !== undefined) {
+    await recordPersona(
+      deps,
+      [...reconciled.savedFlows, ...reconciled.rewroteFlows],
+      options.focus,
+    );
+  }
+  const unverifiedFlows = await flowsThatCheckNothing(deps, [
+    ...reconciled.savedFlows,
+    ...reconciled.rewroteFlows,
+  ]);
+  return { drive, plan, driverName: built.name, ...reconciled, unverifiedFlows };
+}
+
+/**
+ * Write the persona onto every flow the drive saved or rewrote without an intent.
+ *
+ * Whichever driver saved it, and in whatever words: the cheap driver's own teardown saved its flow
+ * with no intent at all, so a replay could never say which journey it was meant to prove. A flow
+ * that already carries an intent keeps it. Best effort: a flow that cannot be read or rewritten is
+ * still a saved flow.
+ */
+async function recordPersona(
+  deps: ToolDeps,
+  names: readonly string[],
+  persona: string,
+): Promise<void> {
+  const intent = persona.trim();
+  if (0 === intent.length) return;
+  for (const name of names) {
+    try {
+      const loaded = await deps.flows.load(name);
+      if (!loaded.ok || (loaded.value.intent ?? '').length > 0) continue;
+      // Its own project: without it the store files a flat duplicate beside the original.
+      const project = loaded.value.projectId;
+      await deps.flows.saveFlow(
+        { ...loaded.value, intent },
+        project === undefined ? undefined : asProjectId(project),
+      );
+    } catch {
+      /* the flow stays as it was saved */
+    }
+  }
+}
+
+/**
+ * The saved flows with no step that asserts a consequence.
+ *
+ * Such a flow replays as "verified nothing": it clicks through the journey and would pass with the
+ * feature broken. Named so the drive's report does not count it as evidence. A flow that cannot be
+ * read is left out rather than guessed at.
+ */
+async function flowsThatCheckNothing(
+  deps: ToolDeps,
+  names: readonly string[],
+): Promise<readonly string[]> {
+  const empty: string[] = [];
+  for (const name of names) {
+    try {
+      const loaded = await deps.flows.load(name);
+      if (!loaded.ok) continue;
+      if (!loaded.value.steps.some((step) => step.expect !== undefined)) empty.push(name);
+    } catch {
+      /* unreadable is not the same as empty */
+    }
+  }
+  return empty;
 }
 
 /**
@@ -454,14 +523,31 @@ export function knownDriver(provider: string | undefined): string | undefined {
  * already closed the stop is refused and there is nothing to do, and a drive must not fail at the
  * finish line because the thing it was trying to rescue did not need rescuing.
  */
-async function bankOpenRecording(toolset: HarnessToolset, drive: HarnessResult): Promise<void> {
+/**
+ * What a banked recording says it was for: the persona the caller named, when there was one.
+ *
+ * It used to be "Autonomous drive of X, banked after the run ended" whatever the caller asked for,
+ * so a replay could never say which journey the flow was meant to prove.
+ */
+export function bankedIntent(persona: string | undefined, open: string): string {
+  const named = persona?.trim();
+  return named !== undefined && 0 < named.length
+    ? named
+    : `Autonomous drive of ${open}, banked after the run ended.`;
+}
+
+async function bankOpenRecording(
+  toolset: HarnessToolset,
+  drive: HarnessResult,
+  persona: string | undefined,
+): Promise<void> {
   const open = openRecordingName(drive.toolCalls);
   if (open === undefined) return;
   try {
     await toolset.invoke(ReticleTool.RECORD, { action: 'stop', recordingName: open });
     await toolset.invoke(ReticleTool.FLOW_SAVE, {
       flowName: open,
-      intent: `Autonomous drive of ${open}, banked after the run ended.`,
+      intent: bankedIntent(persona, open),
     });
   } catch {
     /* last chance, not a checkpoint */

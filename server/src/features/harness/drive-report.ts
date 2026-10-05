@@ -174,6 +174,7 @@ function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
 export function describeDrive(
   toolCalls: readonly ToolOutcome[],
   savedFlows: readonly string[],
+  unverifiedFlows: readonly string[] = [],
 ): string {
   const steps = drivenSteps(toolCalls);
   const replays = replayedFlows(toolCalls);
@@ -255,9 +256,17 @@ export function describeDrive(
     lines.push(
       `${String(undecided.length)} action(s) were NOT PROVED. That is undecided evidence, not a failure: it calls for a better check, not a code change.`,
     );
-  if (0 < savedFlows.length)
+  // A flow with no step that asserts anything replays as "verified nothing": offered as a replay it
+  // reads as evidence, so it is named for what it is instead.
+  const empty = new Set(unverifiedFlows);
+  const replayable = savedFlows.filter((name) => !empty.has(name));
+  if (0 < replayable.length)
     lines.push(
-      `Replay any of this without a model: reticle_verify { action: "flows" } — saved ${savedFlows.join(', ')}.`,
+      `Replay any of this without a model: reticle_verify { action: "flows" } — saved ${replayable.join(', ')}.`,
+    );
+  for (const name of unverifiedFlows)
+    lines.push(
+      `Saved ${name}, but ${name} checks nothing: no step asserts a consequence, so its replay will verify nothing. Drive again naming the end state, or add an expect to its last step.`,
     );
 
   return lines.join('\n');

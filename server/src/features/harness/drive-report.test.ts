@@ -70,6 +70,17 @@ describe('the account an agent reads', () => {
     expect(summary).toContain('4 action(s): 2 proved, 1 failed, 1 not decided');
   });
 
+  it('says which saved flows check nothing, instead of offering them as replays', () => {
+    const summary = describeDrive(
+      [acted('a', 'unknown')],
+      ['harness-drive-home', 'login'],
+      ['harness-drive-home'],
+    );
+    expect(summary).toContain('harness-drive-home checks nothing');
+    expect(summary).toContain('saved login');
+    expect(summary).not.toContain('saved harness-drive-home, login');
+  });
+
   it('calls a failure a finding', () => {
     const summary = describeDrive([acted('a', 'no', 'the button stayed disabled')], []);
     expect(summary).toContain('FAILED');
