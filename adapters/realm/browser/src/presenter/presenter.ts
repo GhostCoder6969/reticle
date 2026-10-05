@@ -180,6 +180,7 @@ export class Presenter {
       // The panel's sync button, onto the same browser→bridge channel the pause, resume and ▶
       // replay controls already use. A new control on an existing channel, not a new channel.
       onSyncNow: () => this.#onControl?.({ kind: HumanControlKind.SYNC }),
+      onSignIn: () => this.#onControl?.({ kind: HumanControlKind.SIGNIN }),
       onHarness: (enabled) =>
         this.#onControl?.({ kind: HumanControlKind.HARNESS, text: enabled ? 'on' : 'off' }),
       settings: {

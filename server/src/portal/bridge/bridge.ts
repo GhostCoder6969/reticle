@@ -181,6 +181,11 @@ function harnessRequest(event: {
   return undefined;
 }
 
+/** True when this event is the panel's Sign in. Pure boundary narrowing, like the above. */
+function isSigninRequest(event: { type: string; data: Record<string, unknown> }): boolean {
+  return event.type === EventType.HUMAN_CONTROL && event.data['kind'] === HumanControlKind.SIGNIN;
+}
+
 /** True when this event is the panel's "sync now" button. Pure boundary narrowing, like the above. */
 function isSyncRequest(event: { type: string; data: Record<string, unknown> }): boolean {
   return event.type === EventType.HUMAN_CONTROL && event.data['kind'] === HumanControlKind.SYNC;
@@ -332,6 +337,7 @@ export class Bridge {
   /** Wired by the daemon: push to the dashboard now, because somebody asked in the panel. */
   #onSyncRequest: (() => void) | undefined;
   #onHarnessRequest: ((enabled: boolean, session: Session) => void) | undefined;
+  #onSigninRequest: (() => void) | undefined;
 
   constructor(options: BridgeOptions) {
     const host = options.host ?? LOOPBACK_HOST;
@@ -760,6 +766,8 @@ export class Bridge {
           // The switch is written through to the platform by the daemon, for the same reason: the
           // Session has no cloud credential and should not grow one.
           else if (harness !== undefined) this.#onHarnessRequest?.(harness, session);
+          // Signing in writes `~/.reticle`, which only the daemon may do; the panel only asks.
+          else if (isSigninRequest(parsed.event)) this.#onSigninRequest?.();
           // Pass the raw frame's byte length so the buffer doesn't re-serialize every event for accounting.
           else session.pushEvent(parsed.event, Buffer.byteLength(text, 'utf8'));
         } else if (parsed.kind === MessageKind.COMMAND_RESULT) {
@@ -902,6 +910,11 @@ export class Bridge {
    */
   attachHarnessRequest(handler: (enabled: boolean, session: Session) => void): void {
     this.#onHarnessRequest = handler;
+  }
+
+  /** Register a handler for the panel's Sign in. Optional, like the above: without one it is ignored. */
+  attachSigninRequest(handler: () => void): void {
+    this.#onSigninRequest = handler;
   }
 
   /** Register a handler to run when a session connects. Additive — every handler runs. */

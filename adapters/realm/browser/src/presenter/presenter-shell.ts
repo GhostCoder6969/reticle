@@ -85,6 +85,8 @@ interface HudShellCallbacks {
   /** The report panel's sync button. The shell owns the socket; the panel only knows it was asked. */
   onSyncNow?: () => void;
   onHarness?: (enabled: boolean) => void;
+  /** Any Sign in button. The daemon owns the credential, so it starts the browser sign-in. */
+  onSignIn?: () => void;
   settings?: SettingsHost;
 }
 /**
@@ -448,7 +450,7 @@ export class HudShell {
     document.addEventListener('keydown', this.#onKeyDown, { signal });
     // One delegated listener set for every account menu under this root, including the ones the
     // panels re-render on each push.
-    this.#accountTeardown = mountAccountControl(root);
+    this.#accountTeardown = mountAccountControl(root, () => this.#callbacks.onSignIn?.());
     // Replay a push that arrived before this mount. Last, so every element it paints into exists.
     if (this.#pushedAccount !== undefined) {
       const pushed = this.#pushedAccount;

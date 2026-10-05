@@ -40,7 +40,7 @@ export const ACCOUNT_SIGNOUT_ATTR = 'data-reticle-account-signout';
 
 export const ACCOUNT_TEXT = {
   SIGNED_OUT: 'Sign in',
-  SIGNIN_TITLE: 'Run `reticle login` in your terminal — click to copy the command',
+  SIGNIN_TITLE: 'Sign in through your browser. Also copies `reticle login`, for a terminal',
   SIGNIN_COMMAND: 'reticle login',
   DASHBOARD_TITLE: 'Open this project on the dashboard',
   /** "Now", not "sync" — the timer already syncs, this only stops somebody wondering when. */
@@ -234,7 +234,7 @@ export function syncButtonHtml(dashboardUrl: string | undefined): string {
  * Returns its own teardown. The caller owns an `AbortController` for everything else, and this hands
  * back a function rather than taking a signal so it can be called from a panel that has none.
  */
-export function mountAccountControl(root: HTMLElement): () => void {
+export function mountAccountControl(root: HTMLElement, onSignIn?: () => void): () => void {
   const controller = new AbortController();
   const { signal } = controller;
 
@@ -312,10 +312,13 @@ export function mountAccountControl(root: HTMLElement): () => void {
 
       // The bare Sign in control carries no `data-reticle-copy`, because it predates the menu and
       // three surfaces plus their tests assert on its attribute.
+      // It asks the daemon to open the browser sign-in, and still copies `reticle login`: the copy is
+      // the fallback for an older daemon that ignores the request, and costs nobody anything.
       const signin = target.closest(`[${ACCOUNT_SIGNIN_ATTR}]`);
       if (signin instanceof HTMLElement) {
         event.preventDefault();
         event.stopPropagation();
+        onSignIn?.();
         void copyCommand(ACCOUNT_TEXT.SIGNIN_COMMAND, signin);
         return;
       }

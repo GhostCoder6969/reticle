@@ -370,6 +370,19 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     );
     p.destroy();
   });
+  it('hands the rail Sign in to whoever can start the browser sign-in', () => {
+    document.body.innerHTML = '';
+    let asked = 0;
+    const shell = new HudShell({ onSignIn: () => (asked += 1) });
+    document.body.innerHTML = `<div data-reticle-overlay>${HudShell.dockHtml('', '', 'data-reticle-log', '', '')}</div>`;
+    const root = document.querySelector<HTMLElement>('[data-reticle-overlay]');
+    if (null === root) throw new Error('overlay missing');
+    shell.mount(root);
+    shell.paintAccount({ signedIn: false }, undefined);
+    click(document.querySelector('[data-reticle-rail-signin] [data-reticle-account-signin]'));
+    expect(asked).toBe(1);
+    shell.teardown();
+  });
   it('asks a signed-out user to sign in on every page, and shows the promo once signed in', () => {
     document.body.innerHTML = '';
     const shell = new HudShell();

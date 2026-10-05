@@ -567,15 +567,14 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     sdkFix: sdkFixForProject,
     ...security,
   });
-  pushHarnessConfig = (root) => {
+  const repaint = (only?: string): void => {
     for (const session of bridge.sessions.all()) {
-      if (
-        (session.artifactRoot ?? options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT)) ===
-        root
-      )
-        session.pushImpact(() => impactSnapshot(root), true);
+      const root =
+        session.artifactRoot ?? options.reticleRoot ?? join(process.cwd(), ReticleDir.ROOT);
+      if (only === undefined || only === root) session.pushImpact(() => impactSnapshot(root), true);
     }
   };
+  pushHarnessConfig = repaint;
   // The daemon owns listen (below), so the real bind error is reported there; absorb bridge.ready's
   // mirror rejection so a port collision can't surface as an unhandled promise rejection.
   void bridge.ready.catch(() => undefined);
@@ -682,6 +681,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // wrong for a button somebody is watching. Never awaited.
   bridge.attachSyncRequest(() => void cloudSync.syncNow());
   // The panel's harness switch, written through to the platform so console and panel cannot disagree.
+  if (options.hudSignIn !== undefined)
+    bridge.attachSigninRequest(options.hudSignIn(() => repaint()));
   bridge.attachHarnessRequest((on, s) => {
     const root = s.artifactRoot ?? reticleRoot;
     applyHarnessSwitch(configForRoot, root, on, platformEnvFor(root));

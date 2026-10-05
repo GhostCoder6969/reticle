@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { hudSignIn } from './cli/cloud-login.js';
 import { handleSetupMcp, handleSetupInstall } from './cli/setup-mcp-cli.js';
 import { reportStepFromCli, reportTutorialShown } from './cli-onboarding.js';
 import { runDemoTour } from './cli/demo/demo-run.js';
@@ -548,7 +549,8 @@ function handleDaemonInner(parsed: {
   httpPort?: number;
   httpToken?: string;
 }): void {
-  const options: StartOptions = daemonStartOptions(parsed);
+  // The daemon the CLI starts is the one that can sign in for the panel: it owns ~/.reticle.
+  const options: StartOptions = { ...daemonStartOptions(parsed), hudSignIn };
 
   startDaemon(options)
     .then((server) => {
