@@ -661,6 +661,12 @@ export const FlowFileSchema = z.object({
    * the on-disk version stays FLOW_FILE_VERSION 1.
    */
   startPath: z.string().optional(),
+  /**
+   * The saved flow this one was generated from, with different parameters (a fixture's customer,
+   * a seeded id). A suite that writes runtime copies of a template and deletes them after replay
+   * proved the template, and a strict pass of a copy counts toward it in the gate (#1321).
+   */
+  template: z.string().min(1).optional(),
   // FUTURE: fixtures/preconditions — schema slot reserved, unpopulated this cut. The recorder
   // never writes it and no fixture runner exists.
   fixture: z.string().optional(),

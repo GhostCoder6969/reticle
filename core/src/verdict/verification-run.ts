@@ -264,6 +264,8 @@ export const RunFlowRecordingSchema = z.object({
 /** A flow that was replayed as part of the run. */
 export const RunFlowResultSchema = z.object({
   name: z.string(),
+  /** The saved flow this replayed copy was generated from — see the flow file's `template`. */
+  template: z.string().optional(),
   status: z.nativeEnum(RunFlowStatus),
   steps: z.number(),
   durationMs: z.number(),
