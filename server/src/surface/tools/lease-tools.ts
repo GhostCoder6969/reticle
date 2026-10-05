@@ -649,10 +649,11 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       await priorLock.catch(() => undefined);
     }
     try {
-      const existing = origin === undefined ? undefined : pool.leaseIdOnOrigin?.(origin);
+      // Only a lease THIS caller took: another agent's tab is never reused or released (#1226).
+      const existing =
+        origin === undefined ? undefined : pool.leaseIdOnOrigin(origin, deps.attachId);
       if (validatedSeed !== undefined && existing !== undefined) {
-        // Caller explicitly requested storage seeding: do not reuse an existing context on this origin,
-        // release it so the new lease starts clean with the caller-provided state.
+        // Seeding asked for: release its own context so the new lease starts with the given state.
         await pool.release(existing);
       } else if (existing !== undefined && origin !== undefined) {
         // Resolved, not looked up — the same resolver the mint path below uses, for the same reason
@@ -701,6 +702,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       try {
         lease = await pool.acquire(navUrl, {
           sessionId,
+          ...(deps.attachId === undefined ? {} : { owner: deps.attachId }),
           ...(validatedSeed !== undefined ? { seedStorage: validatedSeed } : {}),
         });
       } catch (err) {

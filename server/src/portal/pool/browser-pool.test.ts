@@ -203,14 +203,29 @@ describe('BrowserPool', () => {
     const { launch } = fakeLauncher();
     const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
 
-    const a = await pool.acquire('http://localhost:3000/a');
-    await pool.acquire('http://localhost:4000/other');
-    expect(pool.leaseIdOnOrigin('http://localhost:3000')).toBe(a.sessionId);
-    expect(pool.leaseIdOnOrigin('http://localhost:4000')).toBe('s2');
-    expect(pool.leaseIdOnOrigin('http://localhost:9999')).toBeUndefined();
+    const a = await pool.acquire('http://localhost:3000/a', { owner: 'agent-1' });
+    await pool.acquire('http://localhost:4000/other', { owner: 'agent-1' });
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-1')).toBe(a.sessionId);
+    expect(pool.leaseIdOnOrigin('http://localhost:4000', 'agent-1')).toBe('s2');
+    expect(pool.leaseIdOnOrigin('http://localhost:9999', 'agent-1')).toBeUndefined();
 
     pool.alias('app-name', a.sessionId);
-    expect(pool.leaseIdOnOrigin('http://localhost:3000')).toBe('app-name');
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-1')).toBe('app-name');
+  });
+
+  // #1226: two agents on one origin were handed the same tab, so each one's verdicts could rest on
+  // the other's clicks, and a seeded acquire released the other agent's lease from under it.
+  it('hands a lease back only to the caller that took it', async () => {
+    const { launch } = fakeLauncher();
+    const pool = new BrowserPool(launch, { maxContexts: 4, genSessionId: counterIds() });
+
+    const a = await pool.acquire('http://localhost:3000/a', { owner: 'agent-1' });
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-1')).toBe(a.sessionId);
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', 'agent-2')).toBeUndefined();
+    // A caller with no name cannot be told apart from any other, so it is never handed one.
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', undefined)).toBeUndefined();
+    await pool.acquire('http://localhost:3000/b');
+    expect(pool.leaseIdOnOrigin('http://localhost:3000', undefined)).toBeUndefined();
   });
 
   it('release frees the slot and closes the context', async () => {

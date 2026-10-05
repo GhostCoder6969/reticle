@@ -78,6 +78,8 @@ interface ActiveLease {
   context: PooledContext;
   page: PooledPage;
   url: string;
+  /** Who took it (one id per MCP attach). Only that caller is handed it again. */
+  owner?: string;
   /** Last time an agent touched this lease (acquire or any tool call); drives orphan reclaim. */
   touchedAt: number;
   /**
@@ -177,16 +179,20 @@ export class BrowserPool {
   }
 
   /**
-   * The public session id of an active lease on this origin, if we already hold one.
+   * The public session id of an active lease on this origin that `owner` took, if there is one.
    *
    * The lease TOOL reuses that id instead of minting a second context: a second acquire on the same
-   * origin used to leave both tabs connected and poison default session resolution (#600). The pool's
-   * own `acquire` still mints — the parallel suite needs isolation on purpose.
+   * origin used to leave both tabs connected and poison default session resolution (#600). Only the
+   * caller that took the lease gets it back: handing it to whoever asked put two agents in one tab,
+   * each one's verdicts resting on the other's actions (#1226). A caller with no owner cannot be told
+   * apart from another, so it always gets its own. The pool's own `acquire` still mints.
    *
    * Prefers the alias the agent was given, when the app registered under its own name.
    */
-  leaseIdOnOrigin(origin: string): string | undefined {
+  leaseIdOnOrigin(origin: string, owner: string | undefined): string | undefined {
+    if (owner === undefined) return undefined;
     for (const [leaseId, lease] of this.#active) {
+      if (lease.owner !== owner) continue;
       let leaseOrigin: string | undefined;
       try {
         leaseOrigin = new URL(lease.url).origin;
@@ -399,7 +405,12 @@ export class BrowserPool {
    */
   async acquire(
     url: string,
-    opts: { signal?: AbortSignal; sessionId?: string; seedStorage?: SeedStorage } = {},
+    opts: {
+      signal?: AbortSignal;
+      sessionId?: string;
+      seedStorage?: SeedStorage;
+      owner?: string;
+    } = {},
   ): Promise<Lease> {
     if (this.#closed) throw new Error('browser pool is shut down');
     // #waitForSlot claims the slot synchronously (bumps #occupied) before returning, so the cap holds
@@ -476,6 +487,7 @@ export class BrowserPool {
         context,
         page,
         url,
+        ...(opts.owner === undefined ? {} : { owner: opts.owner }),
         touchedAt: this.#now(),
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
         ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),

@@ -66,6 +66,11 @@ export interface ToolDeps<Ext = unknown> {
    * whose server matched (#1136). Absent ⇒ this connection's server matched, or it did not announce.
    */
   peerSkew?: { take(): string | undefined };
+  /**
+   * Who is asking: one id per MCP attach. A browser lease is handed back only to the attach that took
+   * it, so two agents on one origin never share a tab (#1226). Absent ⇒ every acquire gets its own.
+   */
+  attachId?: string;
   /** cross-run outcome memory (.reticle/project.json). */
   project: ProjectStore;
   /** optional native-input provider. undefined ⇒ everything stays synthetic. */

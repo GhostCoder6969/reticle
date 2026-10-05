@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { randomUUID } from 'node:crypto';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { isPredicateParam } from '@reticlehq/engine/question/predicate/predicate-eval.js';
@@ -587,7 +588,7 @@ export function createMcpServer(
    * runs once per client connection, which makes it the right owner; a caller that supplies its own
    * store keeps it.
    */
-  const deps = { snapshots: newSnapshotCache(), ...rawDeps };
+  const deps = { snapshots: newSnapshotCache(), attachId: randomUUID(), ...rawDeps };
   const encoding = (process.env[ENCODING_ENV] ?? '').toLowerCase();
   // Which surface this daemon advertises. The 18-tool default and the 48-tool full surface are
   // different products from inside an agent's context, so outcomes are only comparable when the

@@ -62,11 +62,16 @@ function fakePool(): {
       return undefined;
     }
   };
+  const owners = new Map<string, string | undefined>();
   const pool = {
-    acquire(url: string, opts: { sessionId?: string; seedStorage?: unknown } = {}): Promise<Lease> {
+    acquire(
+      url: string,
+      opts: { sessionId?: string; seedStorage?: unknown; owner?: string } = {},
+    ): Promise<Lease> {
       acquired.push({ url, sessionId: opts.sessionId, seedStorage: opts.seedStorage });
       active += 1;
       const sessionId = opts.sessionId ?? 'gen';
+      owners.set(sessionId, opts.owner);
       const origin = originOf(url);
       if (origin !== undefined) byOrigin.set(origin, sessionId);
       return Promise.resolve({ sessionId, url, release: () => Promise.resolve() });
@@ -83,7 +88,11 @@ function fakePool(): {
     queuedCount: () => 0,
     leasedSessionIds: () => [...byOrigin.values()],
     leaseTtlMs: () => 300_000,
-    leaseIdOnOrigin: (origin: string) => byOrigin.get(origin),
+    // The real pool's rule: only the caller that took a lease is handed it again.
+    leaseIdOnOrigin: (origin: string, owner: string | undefined) => {
+      const id = byOrigin.get(origin);
+      return id !== undefined && owner !== undefined && owners.get(id) === owner ? id : undefined;
+    },
     touch: () => undefined,
     alias: (registeredId: string, leaseId: string) => {
       aliased.push([registeredId, leaseId]);
@@ -94,7 +103,10 @@ function fakePool(): {
 
 // A sessions stub where the leased tab is already "connected", so acquire's wait-for-ready resolves
 // immediately (no real polling) in the happy path.
-const baseDeps = { sessions: { get: () => ({ id: 'live' }) } } as unknown as ToolDeps;
+const baseDeps = {
+  sessions: { get: () => ({ id: 'live' }) },
+  attachId: 'agent-1',
+} as unknown as ToolDeps;
 
 describe('appendReticleParams', () => {
   it('adds the namespaced session (and project) params to a normal url', () => {
@@ -138,6 +150,7 @@ describe('reticle_lease_acquire failure surfaces a clean message', () => {
     const pool = {
       acquire: () =>
         Promise.reject(new Error('page.goto: net::ERR_CONNECTION_REFUSED at http://x/')),
+      leaseIdOnOrigin: () => undefined,
       activeCount: () => 0,
       queuedCount: () => 0,
     } as unknown as BrowserPool;
@@ -238,6 +251,28 @@ describe('reticle_lease_acquire', () => {
     expect(navUrl.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe(result.sessionId);
     expect(navUrl.searchParams.get(RETICLE_URL_PARAM.PROJECT)).toBe('acme');
     expect(acquired[0]?.sessionId).toBe(result.sessionId);
+  });
+
+  it('gives a second agent on the same origin its own tab, and never releases the first (#1226)', async () => {
+    const { pool, acquired, released } = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool },
+      { url: 'http://localhost:3000/login' },
+    )) as { sessionId: string };
+    const other = { ...baseDeps, pool, attachId: 'agent-2' } as ToolDeps;
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(other, {
+      url: 'http://localhost:3000/login',
+    })) as { sessionId: string; reused?: boolean };
+    const seeded = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...other, attachId: 'agent-3' },
+      { url: 'http://localhost:3000/login', seedStorage: { local: { token: 'x' } } },
+    )) as { sessionId: string };
+
+    expect(second.sessionId).not.toBe(first.sessionId);
+    expect(second.reused).toBeUndefined();
+    expect(seeded.sessionId).not.toBe(first.sessionId);
+    expect(acquired).toHaveLength(3);
+    expect(released).toEqual([]);
   });
 
   it('reuses a live lease on the same origin rather than minting a second tab', async () => {
