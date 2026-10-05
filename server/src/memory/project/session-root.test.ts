@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ArtifactRootReason } from './artifact-root.js';
-import { rootForProjectId, sessionProjectId, sessionRoot } from './session-root.js';
+import { rootForTarget, sessionProjectId, sessionRoot } from './session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -9,7 +9,7 @@ import { asProjectId, type ProjectId } from '@reticlehq/core';
 /**
  * Does the ProjectId brand actually bite?
  *
- * `sessionRoot` and `rootForProjectId` sit two lines apart and used to take the SAME argument type,
+ * `sessionRoot` and `rootForTarget` sit two lines apart and used to take the SAME argument type,
  * so swapping them compiled — and then failed silently to the daemon root on both paths: no throw,
  * no log, the artifact written into a tree nobody drove, and the tool reporting success.
  *
@@ -21,7 +21,7 @@ import { asProjectId, type ProjectId } from '@reticlehq/core';
 type Expect<T extends true> = T;
 type Assignable<From, To> = [From] extends [To] ? true : false;
 
-export type ProjectIdParam = Parameters<typeof rootForProjectId>[1];
+export type ProjectIdParam = Parameters<typeof rootForTarget>[1]['projectId'];
 export type SessionIdParam = Parameters<typeof sessionRoot>[1];
 
 /** CAUGHT — the dangerous direction: a plain-string sessionId cannot reach the projectId slot. */
@@ -51,10 +51,14 @@ function deps(options: {
   resolveThrows?: boolean;
   wired?: boolean;
   liveId?: string;
+  url?: string;
+  /** Records the origin each resolution was asked with. */
+  origins?: (string | undefined)[];
 }): ToolDeps {
   const session = {
     id: options.liveId ?? 'demo',
     projectId: options.projectId,
+    url: options.url,
   } as Partial<Session>;
   const sessions: Partial<SessionManager> = {
     /*
@@ -76,10 +80,12 @@ function deps(options: {
     ...(false === options.wired
       ? {}
       : {
-          artifactRootFor: (projectId: ProjectId | undefined) =>
-            'acme-9f3c' === projectId
+          artifactRootFor: (projectId: ProjectId | undefined, origin?: string) => {
+            options.origins?.push(origin);
+            return 'acme-9f3c' === projectId
               ? { root: PROJECT_ROOT, reason: ArtifactRootReason.MATCHED_PROJECT }
-              : { root: DAEMON_ROOT, reason: ArtifactRootReason.NO_MATCH },
+              : { root: DAEMON_ROOT, reason: ArtifactRootReason.NO_MATCH };
+          },
         }),
   } as unknown as ToolDeps;
 }
@@ -204,14 +210,41 @@ describe('sessionProjectId', () => {
   });
 });
 
-describe('rootForProjectId', () => {
+describe('rootForTarget', () => {
   it('routes a minted projectId to its own project', () => {
-    expect(rootForProjectId(deps({ projectId: 'acme-9f3c' }), asProjectId('acme-9f3c'))).toBe(
-      PROJECT_ROOT,
-    );
+    expect(
+      rootForTarget(deps({ projectId: 'acme-9f3c' }), { projectId: asProjectId('acme-9f3c') }),
+    ).toBe(PROJECT_ROOT);
   });
 
   it('still falls back to the daemon root when the id names no project — unchanged behaviour', () => {
-    expect(rootForProjectId(deps({}), asProjectId('s-7f2a-not-a-project'))).toBe(DAEMON_ROOT);
+    expect(rootForTarget(deps({}), { projectId: asProjectId('s-7f2a-not-a-project') })).toBe(
+      DAEMON_ROOT,
+    );
+  });
+});
+
+/**
+ * Every git worktree declares the same projectId, so the id alone cannot say which checkout a
+ * session's artifacts belong in. The page's origin names the dev server that served it, and the
+ * resolver needs it to choose. A session path that dropped it would save a flow into one checkout
+ * and replay it from another.
+ */
+describe('the session’s page origin reaches the resolver', () => {
+  it('passes the origin of the session url, not the full url', () => {
+    const origins: (string | undefined)[] = [];
+    sessionRoot(
+      deps({ projectId: 'acme-9f3c', url: 'http://localhost:5174/checkout?x=1', origins }),
+      undefined,
+    );
+
+    expect(origins).toEqual(['http://localhost:5174']);
+  });
+
+  it('passes no origin when the session has no url', () => {
+    const origins: (string | undefined)[] = [];
+    sessionRoot(deps({ projectId: 'acme-9f3c', origins }), undefined);
+
+    expect(origins).toEqual([undefined]);
   });
 });

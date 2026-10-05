@@ -235,8 +235,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on
   // purpose — the facts a session contributes to a verdict belong beside the session, not
-  // duplicated in two tool files.
-  'server/src/portal/session': 22,
+  // duplicated in two tool files. 23 for `serving-directory.ts`: which checkout's dev server served
+  // a page is a fact about this machine's processes, and `session` is the directory already allowed
+  // to read daemon state and port holders -- every other home needed two new reaches for it.
+  'server/src/portal/session': 23,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others

@@ -20,7 +20,8 @@ import { replayFlow } from './flow-replay.js';
 import { applyHealChanges, collectProposals } from './heal.js';
 import { healPrecondition } from './heal-precondition.js';
 import { assertSuccess, dynamicTestids, successLabel } from './flow-success.js';
-import { flowErrorMessage, sessionProjectId } from './flow-replay-run.js';
+import { flowErrorMessage } from './flow-replay-run.js';
+import { sessionTarget } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 
@@ -68,8 +69,9 @@ export async function healFlow(
 ): Promise<FlowHealResult> {
   const name = asString(args['flowName']) ?? '';
   const apply = true === args['apply'];
-  const projectId = sessionProjectId(deps, asString(args['sessionId']));
-  const loaded = await flowsForSession(deps, projectId).flows.load(name, projectId);
+  const target = sessionTarget(deps, asString(args['sessionId']));
+  const { projectId } = target;
+  const loaded = await flowsForSession(deps, target).flows.load(name, projectId);
   if (!loaded.ok) {
     return {
       name,
@@ -211,7 +213,7 @@ export async function healFlow(
 
   // Healing WRITES, so it must land where the load came from — a heal that read the app's flow and
   // wrote the daemon's copy would silently fork the two.
-  const written = await flowsForSession(deps, projectId).flows.heal(
+  const written = await flowsForSession(deps, target).flows.heal(
     name,
     proposals.map(toChange),
     projectId,

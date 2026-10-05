@@ -3,6 +3,40 @@ import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /**
+ * Which project a call is about, and the page origin it came through.
+ *
+ * The projectId alone is not an address: every git worktree carries the same committed
+ * `.reticle.json`, so a daemon serving several worktrees sees one id for all of them. The origin
+ * names the dev server that served the page, and the resolver uses it to pick the checkout that
+ * server runs in. Carried as one value so no caller can resolve with half of it -- a flow saved
+ * through the worktree and replayed through the id alone would land in one tree and be read from
+ * another.
+ */
+export interface ProjectTarget {
+  projectId: ProjectId | undefined;
+  origin?: string | undefined;
+}
+
+/**
+ * The scheme://host:port a session's page was served from. Local rather than the session manager's
+ * copy because `memory/project` does not reach `portal/session`, and five lines are cheaper than a
+ * new dependency between the two.
+ */
+function originOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The target for a caller that genuinely holds no session -- the id is all there is. */
+export function projectOnly(projectId: ProjectId | undefined): ProjectTarget {
+  return { projectId };
+}
+
+/**
  * The `.reticle` directory a tool call's artifacts belong in.
  *
  * Every call site that reads or writes a project artifact goes through here, and that is the whole
@@ -29,7 +63,10 @@ export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): stri
   // nothing its answer could change, so that one case skips the lookup and costs what it always
   // did. Every embedder of this engine, and every older construction of ToolDeps, is on it.
   const nothingToRefuse = deps.artifactRootFor === undefined && sessionId === undefined;
-  return rootForProjectId(deps, nothingToRefuse ? undefined : sessionProjectId(deps, sessionId));
+  return rootForTarget(
+    deps,
+    nothingToRefuse ? projectOnly(undefined) : sessionTarget(deps, sessionId),
+  );
 }
 
 /**
@@ -41,8 +78,8 @@ export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): stri
  * place and the id from another. `sessionRoot` is now this function plus a lookup, so the two
  * cannot disagree about what a resolved root is.
  */
-export function rootForProjectId(deps: ToolDeps, projectId: ProjectId | undefined): string {
-  return deps.artifactRootFor?.(projectId).root ?? deps.reticleRoot;
+export function rootForTarget(deps: ToolDeps, target: ProjectTarget): string {
+  return deps.artifactRootFor?.(target.projectId, target.origin).root ?? deps.reticleRoot;
 }
 
 /**
@@ -83,10 +120,28 @@ export function sessionProjectId(
   deps: ToolDeps,
   sessionId: string | undefined,
 ): ProjectId | undefined {
+  return sessionTarget(deps, sessionId).projectId;
+}
+
+/**
+ * `sessionTarget` for the paths that degrade instead of refusing: replay and learning resolve a
+ * missing session to the global store, and keep doing so -- with the origin when there is one.
+ */
+export function safeSessionTarget(deps: ToolDeps, sessionId: string | undefined): ProjectTarget {
   try {
-    return deps.sessions.resolve(sessionId).projectId;
+    return sessionTarget(deps, sessionId);
+  } catch {
+    return projectOnly(undefined);
+  }
+}
+
+/** `sessionProjectId` plus the origin the session's page was served from. Same refusals. */
+export function sessionTarget(deps: ToolDeps, sessionId: string | undefined): ProjectTarget {
+  try {
+    const session = deps.sessions.resolve(sessionId);
+    return { projectId: session.projectId, origin: originOf(session.url) };
   } catch (cause) {
-    if (sessionId === undefined) return undefined;
+    if (sessionId === undefined) return projectOnly(undefined);
     throw unresolvedTargetRefusal(sessionId, cause);
   }
 }

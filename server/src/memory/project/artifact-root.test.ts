@@ -130,6 +130,84 @@ describe('resolveArtifactRoot', () => {
     expect(r.candidates).toEqual(['/repo', '/worktree']);
   });
 
+  /**
+   * Worktree-per-PR: every worktree carries the same committed `.reticle.json`, so the projectId
+   * cannot tell them apart — but the dev server that served the page runs inside exactly one of
+   * them. That directory is an observed fact, not a guess, and it breaks the tie.
+   */
+  describe('two checkouts, and the serving dev server runs in one of them', () => {
+    const twoCheckouts = (): ReturnType<typeof candidatesOf> =>
+      candidatesOf([
+        { path: '/repo/.reticle.json', directory: '/repo', projectId: 'acme-web-9f3c1d' },
+        { path: '/wt/pr-7/.reticle.json', directory: '/wt/pr-7', projectId: 'acme-web-9f3c1d' },
+      ]);
+
+    it('resolves to the checkout the serving dev server runs in', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/wt/pr-7',
+      });
+
+      expect(r.root).toBe(join('/wt/pr-7', ReticleDir.ROOT));
+      expect(r.reason).toBe(ArtifactRootReason.MATCHED_PROJECT);
+    });
+
+    it('accepts a dev server running in a subdirectory of the checkout', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/wt/pr-7/apps/web',
+      });
+
+      expect(r.root).toBe(join('/wt/pr-7', ReticleDir.ROOT));
+    });
+
+    /** `.claude/worktrees/x` lives INSIDE the primary checkout; the deeper checkout is the server's. */
+    it('picks the deepest checkout when one sits inside the other', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: candidatesOf([
+          { path: '/repo/.reticle.json', directory: '/repo', projectId: 'acme-web-9f3c1d' },
+          {
+            path: '/repo/.claude/worktrees/x/.reticle.json',
+            directory: '/repo/.claude/worktrees/x',
+            projectId: 'acme-web-9f3c1d',
+          },
+        ]),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/repo/.claude/worktrees/x',
+      });
+
+      expect(r.root).toBe(join('/repo/.claude/worktrees/x', ReticleDir.ROOT));
+    });
+
+    it('still refuses when the serving directory is in neither checkout', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/somewhere/else',
+      });
+
+      expect(r.reason).toBe(ArtifactRootReason.AMBIGUOUS);
+      expect(r.root).toBe(DAEMON_ROOT);
+    });
+
+    it('does not mistake a sibling with a shared prefix for a parent', () => {
+      const r = resolveArtifactRoot({
+        projectId: asProjectId('acme-web-9f3c1d'),
+        candidates: twoCheckouts(),
+        daemonRoot: DAEMON_ROOT,
+        servingDirectory: '/wt/pr-77',
+      });
+
+      expect(r.reason).toBe(ArtifactRootReason.AMBIGUOUS);
+    });
+  });
+
   it('ignores a discovered config that declares no projectId at all', () => {
     const r = resolveArtifactRoot({
       projectId: asProjectId('acme-web-9f3c1d'),

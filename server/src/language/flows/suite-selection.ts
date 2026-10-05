@@ -11,14 +11,9 @@
  * already existed. The pure rule lives in core (`selectFlows`); this is the part that has to read
  * the files, because a label lives in one and `list` returns only names.
  */
-import {
-  type ProjectId,
-  FLOW_FILE_VERSION,
-  orderFlows,
-  selectFlows,
-  type FlowFile,
-} from '@reticlehq/core';
+import { FLOW_FILE_VERSION, orderFlows, selectFlows, type FlowFile } from '@reticlehq/core';
 import { flowsForSession } from './flow-store-for-session.js';
+import type { ProjectTarget } from '@/memory/project/session-root.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 
 /**
@@ -33,7 +28,7 @@ import type { ToolDeps } from '@/surface/tools/tool-kit.js';
  */
 export async function resolveSuiteSelection(
   deps: ToolDeps,
-  projectId: ProjectId | undefined,
+  target: ProjectTarget,
   args: Record<string, unknown>,
 ): Promise<{
   run: string[];
@@ -52,7 +47,8 @@ export async function resolveSuiteSelection(
    */
   knownRoutes: string[];
 }> {
-  const store = flowsForSession(deps, projectId).flows;
+  const { projectId } = target;
+  const store = flowsForSession(deps, target).flows;
   const names = await store.list(projectId);
   const asStrings = (value: unknown): string[] =>
     Array.isArray(value) ? value.filter((v): v is string => 'string' === typeof v) : [];

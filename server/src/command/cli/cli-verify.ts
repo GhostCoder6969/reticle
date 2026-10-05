@@ -20,6 +20,7 @@ import {
   MSG_NO_HARNESS_KEY,
 } from '@/surface/tools/harness-explore.js';
 import { resolveSuiteSelection } from '@/language/flows/suite-selection.js';
+import { projectOnly } from '@/memory/project/session-root.js';
 import {
   readOrCreatePairingTokenSync,
   defaultPairingTokenDir,
@@ -417,7 +418,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     listFlows: async (select) =>
       select === undefined || 0 === select.length
         ? deps.flows.list()
-        : (await resolveSuiteSelection(deps, undefined, { labels: [...select] })).run,
+        : (await resolveSuiteSelection(deps, projectOnly(undefined), { labels: [...select] })).run,
     // Absent, not throwing, when no model is configured: the CLI reads its absence as "unavailable"
     // and prints the one sentence that makes it available.
     ...(harnessAvailable(process.env)

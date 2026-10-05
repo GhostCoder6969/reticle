@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import {
   SAFE_SEGMENT_PATTERN,
   ReticleDir,
@@ -55,6 +55,13 @@ interface ArtifactRootQuery {
   candidates: readonly ProjectCandidate[];
   /** Where artifacts go when the project cannot be identified. Already a `.reticle` path. */
   daemonRoot: string;
+  /**
+   * The directory the dev server that served this page runs in, when the caller could observe it.
+   * Only consulted to break an AMBIGUOUS tie: every git worktree carries the same committed
+   * `.reticle.json`, so the projectId cannot tell them apart, but the serving process runs inside
+   * exactly one of them.
+   */
+  servingDirectory?: string | undefined;
 }
 
 export interface ArtifactRoot {
@@ -88,6 +95,10 @@ export function resolveArtifactRoot(query: ArtifactRootQuery): ArtifactRoot {
   }
 
   if (matches.length > 1) {
+    const served = checkoutContaining(matches, query.servingDirectory);
+    if (served !== undefined) {
+      return { root: join(served, ReticleDir.ROOT), reason: ArtifactRootReason.MATCHED_PROJECT };
+    }
     return {
       root: daemonRoot,
       reason: ArtifactRootReason.AMBIGUOUS,
@@ -104,6 +115,27 @@ export function resolveArtifactRoot(query: ArtifactRootQuery): ArtifactRoot {
   }
 
   return { root: join(directory, ReticleDir.ROOT), reason: ArtifactRootReason.MATCHED_PROJECT };
+}
+
+/**
+ * The checkout the serving directory sits in, or undefined when it is in none of them.
+ *
+ * Deepest wins, because a worktree can live INSIDE the primary checkout (`.claude/worktrees/x`) and
+ * then sits under both; the deeper one is the one the server actually runs in. `relative` rather
+ * than a string prefix, so `/wt/pr-77` is not read as inside `/wt/pr-7`, and on every platform.
+ */
+function checkoutContaining(
+  matches: readonly ProjectCandidate[],
+  servingDirectory: string | undefined,
+): string | undefined {
+  if (servingDirectory === undefined || 0 === servingDirectory.length) return undefined;
+  const inside = matches
+    .map((candidate) => candidate.directory)
+    .filter((directory) => {
+      const rel = relative(directory, servingDirectory);
+      return '' === rel || ('..' !== rel && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+    });
+  return inside.sort((a, b) => b.length - a.length)[0];
 }
 
 /**

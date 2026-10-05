@@ -35,7 +35,8 @@ import type { SuiteVerdict } from '@reticlehq/core';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
-import { rootForProjectId } from '@/memory/project/session-root.js';
+import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
+import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
 import {
   replayNamedFlow,
@@ -61,7 +62,7 @@ import { replayAndLearn } from './flow-learning.js';
 async function syncSavedFlowToCloud(
   deps: ToolDeps,
   flow: FlowFile,
-  projectId: ProjectId | undefined,
+  target: ProjectTarget,
 ): Promise<void> {
   // Per-project cloud: sync a saved flow only when cloud is attached AND flow sync is enabled.
   // The link file of the project this flow belongs to — the flow itself was already saved through
@@ -69,12 +70,12 @@ async function syncSavedFlowToCloud(
   // reaches another project's dashboard.
   const cloud = await resolveProjectCloud(
     deps.fs,
-    rootForProjectId(deps, projectId),
+    rootForTarget(deps, target),
     homedir(),
     process.env,
   );
   if (null === cloud.config || !cloud.policy.flows) return; // not attached / flows disabled → local only
-  const result = await syncFlowToCloud(flow, cloud.config, projectId, cloudFetch);
+  const result = await syncFlowToCloud(flow, cloud.config, target.projectId, cloudFetch);
   if (result.outcome !== SyncOutcome.SYNCED) {
     log('cloud-flow-sync-failed', { flow: flow.name, status: result.status, error: result.error });
   }
@@ -258,12 +259,13 @@ export const FLOW_TOOLS: ToolDef[] = [
         ...(success !== undefined ? { success } : {}),
         ...(intent !== undefined ? { intent } : {}),
       };
-      const projectId = sessionProjectId(deps, asString(args['sessionId']));
+      const target = sessionTarget(deps, asString(args['sessionId']));
+      const { projectId } = target;
       // A zero-step recording is not a flow. Saving it wrote a file the suite reports "unverifiable"
       // forever while telling the agent it had saved a regression test — see empty-flow.
       const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
       if (emptyRefusal !== undefined) return Promise.resolve(emptyRefusal);
-      const { flows, root } = flowsForSession(deps, projectId);
+      const { flows, root } = flowsForSession(deps, target);
       const author = flowAuthor();
       const toSave = {
         ...program,
@@ -325,10 +327,11 @@ export const FLOW_TOOLS: ToolDef[] = [
     // (the prior bug) made schema-validating MCP clients reject the result ("expected object,
     // received string") — caught driving the live demo.
     handler: (deps: ToolDeps, args) => {
-      const projectId = sessionProjectId(deps, asString(args['sessionId']));
+      const target = sessionTarget(deps, asString(args['sessionId']));
+      const { projectId } = target;
       // The APP's flows, not the daemon's. Listing where the daemon was launched is what showed a
       // React dashboard a HUD full of Electron and Tauri flows from an unrelated checkout.
-      const { flows: store, root } = flowsForSession(deps, projectId);
+      const { flows: store, root } = flowsForSession(deps, target);
       return store.list(projectId).then((names) => ({
         // `list` deliberately returns invalid names so they are reported rather than silently
         // dropped — but the declared outputSchema requires `path` on EVERY entry, and omitting it made
@@ -553,11 +556,9 @@ export const FLOW_TOOLS: ToolDef[] = [
        * inherit it as a mystery — the same rule the mutation loop had to earn.
        */
       const sessionId = asString(args['sessionId']);
-      const loaded = await flowsForSession(deps, sessionProjectId(deps, sessionId))
-        .flows.load(
-          asString(args['flowName']) ?? asString(args['flow']) ?? '',
-          sessionProjectId(deps, sessionId),
-        )
+      const target = sessionTarget(deps, sessionId);
+      const loaded = await flowsForSession(deps, target)
+        .flows.load(asString(args['flowName']) ?? asString(args['flow']) ?? '', target.projectId)
         .catch(() => null);
       const targets = loaded !== null && loaded.ok ? mutationTargetsFor(loaded.value) : [];
       const rules = perturbationFor(seed, targets);
@@ -672,8 +673,9 @@ export const FLOW_TOOLS: ToolDef[] = [
     handler: async (deps: ToolDeps, args): Promise<SuiteVerdict> => {
       const sessionId = asString(args['sessionId']);
       // "Replay all" means all of THIS app's flows (+ legacy), not every project's on a shared daemon.
-      const projectId = sessionProjectId(deps, sessionId);
-      const selected = await resolveSuiteSelection(deps, projectId, args);
+      const target = sessionTarget(deps, sessionId);
+      const { projectId } = target;
+      const selected = await resolveSuiteSelection(deps, target, args);
       const requested = selected.run;
       /** Named rather than subtracted — a suite that returns fewer than were asked for must say so. */
       const heldBack = {
@@ -685,7 +687,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       // verify:server — hand the whole suite to the hosted runner; it records the verification itself.
       const cloud = await resolveProjectCloud(
         deps.fs,
-        rootForProjectId(deps, projectId),
+        rootForTarget(deps, target),
         homedir(),
         process.env,
       );
@@ -745,7 +747,7 @@ export const FLOW_TOOLS: ToolDef[] = [
             const name = requested[i] ?? '';
             const replay =
               o.ok && o.value !== undefined ? o.value.replay : leaseFailureReplay(name, o.error);
-            const loaded = await flowsForSession(deps, projectId)
+            const loaded = await flowsForSession(deps, target)
               .flows.load(name, projectId)
               .catch(() => null);
             const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
@@ -756,12 +758,8 @@ export const FLOW_TOOLS: ToolDef[] = [
           ...(parallelRuns[i] ?? { replay: leaseFailureReplay(requested[i] ?? '', o.error) }),
           durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
         }));
-        const flaky = await recordSuiteFlakes(
-          deps.fs,
-          rootForProjectId(deps, projectId),
-          parallelRuns,
-        );
-        await persistAndSyncVerificationRun(deps, timed, projectId);
+        const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), parallelRuns);
+        await persistAndSyncVerificationRun(deps, timed, target);
         const verdict = buildSuiteVerdict(
           parallelRuns,
           selected.knownRoutes,
@@ -789,7 +787,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       for (const flowName of requested) {
         const start = deps.now();
         const replay = await replayAndLearn(deps, { flowName, sessionId });
-        const loaded = await flowsForSession(deps, projectId)
+        const loaded = await flowsForSession(deps, target)
           .flows.load(flowName, projectId)
           .catch(() => null);
         const flow = loaded !== null && loaded.ok ? loaded.value : undefined;
@@ -804,9 +802,9 @@ export const FLOW_TOOLS: ToolDef[] = [
       // `reticle flow` on the command line, so an AGENT running this tool a hundred times learned
       // nothing about which flows are intermittent. Same product, same ledger, two surfaces, and the
       // one an agent uses was the blind half.
-      const flaky = await recordSuiteFlakes(deps.fs, rootForProjectId(deps, projectId), runs);
+      const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), runs);
       // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
-      await persistAndSyncVerificationRun(deps, timed, projectId);
+      await persistAndSyncVerificationRun(deps, timed, target);
       const verdict = buildSuiteVerdict(runs, selected.knownRoutes, SuiteIsolation.SHARED_SESSION);
       // A flow that has both passed and failed on UNCHANGED code is a different thing from a
       // regression, and an agent that cannot tell them apart either chases a ghost or ignores a real
@@ -887,14 +885,12 @@ export const FLOW_TOOLS: ToolDef[] = [
       // Resolved like every other path now. This save used to go to the daemon's root while the
       // recorded-flow save resolved per session, so where a flow landed depended on which tool wrote
       // it — and the pair that disagreed were the two ways to save the same thing.
-      const res = await flowsForSession(deps, session.projectId).flows.saveFlow(
-        flow,
-        session.projectId,
-      );
+      const target: ProjectTarget = { projectId: session.projectId, origin: originOf(session.url) };
+      const res = await flowsForSession(deps, target).flows.saveFlow(flow, session.projectId);
       if (!res.ok) return { error: flowErrorMessage(res.code, res.detail), code: res.code };
       // If logged in to Reticle, mirror the saved flow to the team's regression suite. Best-effort
       // and non-blocking: the flow is already on disk, so a sync failure never fails the save.
-      void syncSavedFlowToCloud(deps, flow, session.projectId);
+      void syncSavedFlowToCloud(deps, flow, target);
       // Return the SaveSummary as-is ({ name, stepCount, degraded, empty }) — the outputSchema
       // declares `name`, so the old `flowName` key was silently stripped by schema-strict clients.
       return res.value;

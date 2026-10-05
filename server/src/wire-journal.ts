@@ -8,6 +8,7 @@
  * the 1000-line backstop is what asked for the split.
  */
 import { artifactRootResolver } from './memory/project/artifact-root-resolver.js';
+import { servingDirectoryOf } from './portal/session/serving-directory.js';
 import { originOf } from './portal/session/session-manager.js';
 import { Bridge } from './portal/bridge/bridge.js';
 import { FlowStore } from './language/flows/flows.js';
@@ -59,7 +60,9 @@ export function attachJournal(
   const ambientStore = new AmbientStore(deps.fs, deps.reticleRoot);
   // Built once, not per session: the resolver walks config discovery and the user-level registry,
   // and neither changes between two tabs connecting a second apart.
-  const resolveArtifactRoot = artifactRootResolver(deps.reticleRoot);
+  const resolveArtifactRoot = artifactRootResolver(deps.reticleRoot, {
+    servingDirectory: servingDirectoryOf,
+  });
   bridge.attachSessionCreate((session) => {
     // Stamp the project's own `.reticle` before ANY counter fires for this session. Without it every
     // verdict is recorded against wherever the daemon was started, which is how one app's evidence

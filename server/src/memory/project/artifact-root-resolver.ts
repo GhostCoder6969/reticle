@@ -128,20 +128,28 @@ export function projectDirectoryFor(projectId: string | undefined): string | und
   return 1 === directories.size ? [...directories][0] : undefined;
 }
 
-/** Where this resolver gets its two IO answers. The defaults are the production ones. */
+/** Where this resolver gets its IO answers. The defaults are the production ones. */
 export interface ArtifactRootResolverDeps {
   /** Every project this machine knows about. Defaults to discovery + the user registry. */
   candidates?: () => ProjectCandidate[];
   /** Whether the daemon's own directory is a Reticle project. Defaults to looking at disk. */
   daemonIsProject?: (daemonRoot: string) => boolean;
+  /**
+   * The directory of the dev server that served a page origin, or undefined when unobservable.
+   * Required, not defaulted: the production answer reads daemon state and shells out, which is the
+   * wiring layer's business (`portal/session/serving-directory.ts`), and a resolver built without it
+   * would silently keep sending every worktree's artifacts to the primary checkout.
+   */
+  servingDirectory: (origin: string) => string | undefined;
 }
 
 export function artifactRootResolver(
   daemonRoot: string,
-  deps: ArtifactRootResolverDeps = {},
+  deps: ArtifactRootResolverDeps,
 ): (projectId: ProjectId | undefined, origin?: string) => ArtifactRoot {
   const candidates = deps.candidates ?? knownProjectCandidates;
   const sitsInAProject = deps.daemonIsProject ?? daemonSitsInAProject;
+  const { servingDirectory } = deps;
   const daemonIsProject = sitsInAProject(daemonRoot);
   // Resolved beside it and ONCE, for the same reason: a directory's `.reticle.json` does not change
   // between two tabs connecting. Only read when the daemon really is in a project, since it is the
@@ -150,11 +158,19 @@ export function artifactRootResolver(
     ? daemonOwnProjectId(daemonRoot, candidates())
     : undefined;
   return (projectId, origin) => {
-    const resolved = resolveArtifactRoot({
-      projectId,
-      candidates: candidates(),
-      daemonRoot,
-    });
+    const known = candidates();
+    let resolved = resolveArtifactRoot({ projectId, candidates: known, daemonRoot });
+    // Several checkouts declare this project — every git worktree carries the same committed
+    // `.reticle.json`. Only now is the serving process looked up: it shells out, and the tie is the
+    // one case where where the page was SERVED from is the deciding fact.
+    if (resolved.reason === ArtifactRootReason.AMBIGUOUS && origin !== undefined) {
+      resolved = resolveArtifactRoot({
+        projectId,
+        candidates: known,
+        daemonRoot,
+        servingDirectory: servingDirectory(origin),
+      });
+    }
     if (resolved.reason === ArtifactRootReason.MATCHED_PROJECT) return resolved;
     // Could not name the project. The old code wrote into the daemon's directory anyway and said
     // nothing, which put `.reticle/` — journals included — into repositories nobody had

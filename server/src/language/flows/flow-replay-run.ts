@@ -42,7 +42,11 @@ import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js'
 import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { dischargeFlowIntent, flowIntentStatement, flowReplayVerdictId } from './flow-intent.js';
 import { IntentStore } from '@/memory/intent/intent-store.js';
-import { sessionRoot } from '@/memory/project/session-root.js';
+import {
+  safeSessionTarget,
+  sessionRoot,
+  type ProjectTarget,
+} from '@/memory/project/session-root.js';
 import { waitForPredicate } from '@reticlehq/engine/question/predicate/predicate.js';
 import { computeSegments } from '@/memory/journal/rollups.js';
 import { stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
@@ -508,7 +512,7 @@ export async function navigateAndAwait(
 async function loadInvokedFlows(
   deps: ToolDeps,
   flow: FlowFile,
-  projectId?: ProjectId,
+  target: ProjectTarget,
 ): Promise<Map<string, FlowFile>> {
   const out = new Map<string, FlowFile>();
   const queue: FlowFile[] = [flow];
@@ -520,7 +524,7 @@ async function loadInvokedFlows(
       const name = step.invoke;
       if (name === undefined || seen.has(name)) continue;
       seen.add(name);
-      const sub = await flowsForSession(deps, projectId).flows.load(name, projectId);
+      const sub = await flowsForSession(deps, target).flows.load(name, target.projectId);
       if (!sub.ok) continue;
       out.set(name, sub.value);
       queue.push(sub.value);
@@ -606,15 +610,11 @@ export async function replayNamedFlow(
   // Resolve within the connecting app's scope so a shared daemon replays THIS project's flow, not a
   // same-named flow from another app. Safe-resolve: a missing session degrades to the global store,
   // and the load-then-session order (unchanged) still surfaces a not-found before a no-session error.
-  let projectId: ProjectId | undefined;
-  try {
-    projectId = deps.sessions.resolve(asString(args['sessionId'])).projectId;
-  } catch {
-    projectId = undefined;
-  }
+  const target = safeSessionTarget(deps, asString(args['sessionId']));
+  const { projectId } = target;
   // The app's store, not the daemon's: this load answering `flow_not_found` for a flow plainly on
   // disk is what made replay unusable from a daemon started outside the project.
-  const loaded = await flowsForSession(deps, projectId).flows.load(name, projectId);
+  const loaded = await flowsForSession(deps, target).flows.load(name, projectId);
   if (!loaded.ok) {
     await recordReplayRun(
       deps,
@@ -672,7 +672,7 @@ export async function replayNamedFlow(
   // Loaded once and used for BOTH the replay and the grading below. A composite asserts through
   // what it runs, and a grader that cannot see the sub-flows reports `unverifiable` on a journey
   // that checks itself thoroughly — right about the file, wrong about the journey.
-  const invokedFlows = await loadInvokedFlows(deps, replayable, projectId);
+  const invokedFlows = await loadInvokedFlows(deps, replayable, target);
   /*
    * The flow's own preconditions, before a single step runs.
    *
@@ -747,7 +747,7 @@ export async function replayNamedFlow(
         // How an `invoke` step finds the flow it runs. Scoped to the same project as the flow being
         // replayed, so a composite cannot reach into another app's store for a same-named sub-journey.
         resolveFlow: async (invoked: string) => {
-          const sub = await flowsForSession(deps, projectId).flows.load(invoked, projectId);
+          const sub = await flowsForSession(deps, target).flows.load(invoked, projectId);
           return sub.ok ? await resolveFlowUploads(deps, sub.value) : undefined;
         },
         // Bug-sweep mode: keep going past a step whose action ran and whose consequence merely did

@@ -48,7 +48,11 @@ const resolveInMain = (named: string) =>
   artifactRootResolver(join(MAIN, ReticleDir.ROOT), {
     candidates: onlyMain,
     daemonIsProject: () => true,
+    servingDirectory: noServingDirectory,
   })(asProjectId(named));
+
+/** Most specs are not about the serving process: nothing observable, as on a remote page. */
+const noServingDirectory = (): undefined => undefined;
 
 const inUnmatched = (root: string, projectId: string): boolean =>
   root.endsWith(join(UNMATCHED_SUBDIR, projectId));
@@ -86,6 +90,7 @@ describe('a daemon that cannot place the project it was asked about', () => {
     const resolved = artifactRootResolver(join(MAIN, ReticleDir.ROOT), {
       candidates: onlyMain,
       daemonIsProject: () => true,
+      servingDirectory: noServingDirectory,
     })(undefined);
 
     expect(resolved.root).toBe(join(MAIN, ReticleDir.ROOT));
@@ -96,6 +101,7 @@ describe('a daemon that cannot place the project it was asked about', () => {
     const resolved = artifactRootResolver(join(BACKEND, ReticleDir.ROOT), {
       candidates: onlyMain,
       daemonIsProject: () => false,
+      servingDirectory: noServingDirectory,
     })(asProjectId(WORKTREE_ID));
 
     expect(resolved.root).not.toBe(join(BACKEND, ReticleDir.ROOT));
@@ -123,6 +129,7 @@ describe('a project two checkouts both declare', () => {
         { projectId: MAIN_ID, directory: CLONE },
       ],
       daemonIsProject: () => true,
+      servingDirectory: noServingDirectory,
     })(asProjectId(MAIN_ID));
 
     expect(resolved.reason).toBe(ArtifactRootReason.AMBIGUOUS);
@@ -142,9 +149,66 @@ describe('a project two checkouts both declare', () => {
         { projectId: MAIN_ID, directory: CLONE },
       ],
       daemonIsProject: () => true,
+      servingDirectory: noServingDirectory,
     })(asProjectId(MAIN_ID));
 
     expect(resolved.root).not.toBe(join(BACKEND, ReticleDir.ROOT));
     expect(inUnmatched(resolved.root, MAIN_ID)).toBe(true);
+  });
+});
+
+/**
+ * Worktree-per-PR, through the resolver: both checkouts declare the project (one committed
+ * `.reticle.json`), the daemon was started in the primary, and the page was served by the worktree's
+ * dev server. The old answer was the daemon's own root — the primary — so the worktree's flows never
+ * reached its branch and `reticle gate` run there reported nothing covered.
+ */
+describe('a project two checkouts declare, served from one of them', () => {
+  const ORIGIN = 'http://localhost:5174';
+  const both = (): ProjectCandidate[] => [
+    { projectId: MAIN_ID, directory: MAIN },
+    { projectId: MAIN_ID, directory: CLONE },
+  ];
+
+  it('writes into the checkout whose dev server served the page', () => {
+    const asked: string[] = [];
+    const resolved = artifactRootResolver(join(MAIN, ReticleDir.ROOT), {
+      candidates: both,
+      daemonIsProject: () => true,
+      servingDirectory: (origin) => {
+        asked.push(origin);
+        return CLONE;
+      },
+    })(asProjectId(MAIN_ID), ORIGIN);
+
+    expect(asked).toEqual([ORIGIN]);
+    expect(resolved.reason).toBe(ArtifactRootReason.MATCHED_PROJECT);
+    expect(resolved.root).toBe(join(CLONE, ReticleDir.ROOT));
+  });
+
+  it('keeps today’s answer when the serving directory cannot be found', () => {
+    const resolved = artifactRootResolver(join(MAIN, ReticleDir.ROOT), {
+      candidates: both,
+      daemonIsProject: () => true,
+      servingDirectory: () => undefined,
+    })(asProjectId(MAIN_ID), ORIGIN);
+
+    expect(resolved.reason).toBe(ArtifactRootReason.AMBIGUOUS);
+    expect(resolved.root).toBe(join(MAIN, ReticleDir.ROOT));
+  });
+
+  /** The lookup shells out; a project that already resolved must never pay for it. */
+  it('does not look for the serving directory when one checkout already matches', () => {
+    let looked = false;
+    artifactRootResolver(join(MAIN, ReticleDir.ROOT), {
+      candidates: onlyMain,
+      daemonIsProject: () => true,
+      servingDirectory: () => {
+        looked = true;
+        return CLONE;
+      },
+    })(asProjectId(MAIN_ID), ORIGIN);
+
+    expect(looked).toBe(false);
   });
 });

@@ -17,6 +17,7 @@ import {
   artifactRootResolver,
   projectDirectoryFor,
 } from './memory/project/artifact-root-resolver.js';
+import { servingDirectoryOf } from './portal/session/serving-directory.js';
 import type { Server } from 'node:http';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -492,7 +493,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       fs,
       reticleRoot,
       linkedCloud: linkedCloudPort(fs, reticleRoot, homedir(), process.env),
-      artifactRootFor: artifactRootResolver(reticleRoot),
+      artifactRootFor: artifactRootResolver(reticleRoot, { servingDirectory: servingDirectoryOf }),
       now,
       bridgePort: port,
       browserProbe: probeLaunchableChromium,
@@ -714,7 +715,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     // daemon — the common case — so flows were listed, loaded and healed against wherever the
     // daemon happened to be launched. Wired in only one of the two places, a resolver is a resolver
     // that does not run.
-    artifactRootFor: artifactRootResolver(reticleRoot),
+    artifactRootFor: artifactRootResolver(reticleRoot, { servingDirectory: servingDirectoryOf }),
     now,
     bridgePort: port,
     browserProbe: probeLaunchableChromium,
