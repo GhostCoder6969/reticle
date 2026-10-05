@@ -58,7 +58,7 @@ import {
   SyncOutcome,
   type CloudConfig,
 } from '@/memory/cloud/cloud-sync.js';
-import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
+import { linkedRunsCloudPort } from '@/memory/cloud/cloud-config.js';
 import { homedir } from 'node:os';
 import { ReticleRunner, type VerifyProgressListener } from '@/judgement/runs/reticle-runner.js';
 import { createRunnerPort } from '@/judgement/runs/runner-port.js';
@@ -673,7 +673,7 @@ export function handleVerify(parsed: {
     out: (line) => process.stdout.write(`${line}\n`),
     fail: (line) => process.stderr.write(`${line}\n`),
     exit: (code) => process.exit(code),
-    cloud: linkedCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
+    cloud: linkedRunsCloudPort(createNodeFileSystem(), reticleRoot, homedir(), process.env),
   };
   // Asked BEFORE anything binds. The listen failure arrives asynchronously on the server object,
   // long after `start` has resolved, so no `.catch` on that promise can ever see it — which is why
