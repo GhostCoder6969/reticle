@@ -34,7 +34,12 @@ import {
   rememberConnected,
 } from '@/memory/recall/prior/connection-memory.js';
 import { isAlive, reticleStateHome } from '@/command/daemon/daemon.js';
-import { daemonsServingProjectElsewhere, splitBrainNote } from '@/command/daemon/daemon-resolve.js';
+import {
+  daemonsServingProjectElsewhere,
+  projectDaemonsElsewhere,
+  projectlessNote,
+  splitBrainNote,
+} from '@/command/daemon/daemon-resolve.js';
 import { stallUptime } from './stall-clock.js';
 import type { SessionManager } from './session-manager.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
@@ -242,6 +247,12 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
    */
   const splitBrain = (): string | undefined => {
     const projectId = readProjectId(directory);
+    if (projectId === undefined) {
+      return projectlessNote(
+        options.port,
+        projectDaemonsElsewhere(options.port, stateDir, isAlive),
+      );
+    }
     return splitBrainNote(
       options.port,
       daemonsServingProjectElsewhere(projectId, options.port, stateDir, isAlive, (port) =>
