@@ -52,6 +52,8 @@ const DERIVED_RECORDS = [
   // cannot tell a server a page that drifted from one that always behaved that way.
   { kind: 'envelopes', file: ReticleDir.ENVELOPES_FILE },
   { kind: 'assertion-tiers', file: ReticleDir.TIERS_FILE },
+  // Reticle Coverage: what the platform's Overview shows as controls proved and routes reached.
+  { kind: 'coverage', file: ReticleDir.COVERAGE_FILE },
 ] as const;
 
 type DerivedKind = (typeof DERIVED_RECORDS)[number]['kind'];
