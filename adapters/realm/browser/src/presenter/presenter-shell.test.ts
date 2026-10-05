@@ -25,6 +25,16 @@ afterEach(() => {
 const HUD_MOUNT_TIMEOUT_MS = 30_000;
 
 describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
+  // #992: the HUD sat outside every landmark, so an instrumented page could never be axe-clean.
+  it('is one labelled landmark, so the page it sits on stays axe-clean', () => {
+    const p = new Presenter({});
+    p.mount();
+    p.sessionStart();
+    const dock = document.querySelector('[data-reticle-dock]');
+    expect(dock?.getAttribute('role')).toBe('complementary');
+    expect(dock?.getAttribute('aria-label')).toBe('Reticle');
+  });
+
   it('renders six top-level destinations/actions once with one aligned toolbar', () => {
     document.body.innerHTML = '';
     const p = new Presenter({});
