@@ -35,6 +35,9 @@ const RUN_FILENAME = 'reticle-run.json';
 /** Border fade-out delay after a session ends (native timer; presenter-only tunable). */
 export const ENDED_FADE_MS = 4000;
 
+/** Where the panel remembers which saved flows were replayed last, to list them first. */
+const RECENT_PLAYS_KEY = 'reticle.flow.recent.v1';
+
 const FLOW_TEXT = {
   REPLAYABLE: 'Replay without an agent',
   ELSEWHERE: 'Starts on another page',
@@ -228,7 +231,7 @@ interface ControlPanelHost {
 export class ControlPanel {
   #recentPlays: Record<string, number> = (() => {
     try {
-      const raw: unknown = JSON.parse(localStorage.getItem('reticle.flow.recent.v1') ?? '{}');
+      const raw: unknown = JSON.parse(localStorage.getItem(RECENT_PLAYS_KEY) ?? '{}');
       return 'object' === typeof raw && raw !== null && !Array.isArray(raw)
         ? (raw as Record<string, number>)
         : {};
@@ -292,7 +295,7 @@ export class ControlPanel {
       if (name !== null && name.length > 0) {
         this.#recentPlays[name] = Date.now();
         try {
-          localStorage.setItem('reticle.flow.recent.v1', JSON.stringify(this.#recentPlays));
+          localStorage.setItem(RECENT_PLAYS_KEY, JSON.stringify(this.#recentPlays));
         } catch {
           /* private browsing */
         }

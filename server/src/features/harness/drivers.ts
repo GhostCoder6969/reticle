@@ -1,3 +1,4 @@
+import { ReticleEnv } from '@reticlehq/core';
 /**
  * The names of the drivers the harness can be asked for.
  *
@@ -28,5 +29,5 @@ export const CUSTOM_DRIVER_NAME = 'custom';
  * ANTHROPIC_API_KEY" in three places after the platform proxy, Jev and OpenAI had all become ways in.
  */
 export const EXPLORE_NEEDS =
-  'Needs a Reticle Harness plan on a linked project, or your own ANTHROPIC_API_KEY, JEV_API_KEY or ' +
-  'OPENAI_API_KEY in the daemon environment.';
+  `Needs a Reticle Harness plan on a linked project, or your own ${ReticleEnv.HARNESS_KEY}, ` +
+  `${ReticleEnv.HARNESS_JEV_KEY} or ${ReticleEnv.HARNESS_OPENAI_KEY} in the daemon environment.`;
