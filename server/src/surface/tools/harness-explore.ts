@@ -9,6 +9,7 @@
  */
 
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
+import { proposePersonas, type Persona } from '@/features/harness/platform/personas.js';
 import { ReticleEnv, ReticleTool, asProjectId, cloudUrlFrom, asRecord } from '@reticlehq/core';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -110,6 +111,8 @@ export interface ExploreResult {
   rewroteFlows: readonly string[];
   /** One verdict per goal, checked by the harness after the drive rather than taken on its word. */
   goals: readonly GoalCheck[];
+  /** The persona plan and how each persona ended, when the platform proposed the personas. */
+  planLines?: readonly string[];
   /**
    * Which driver actually drove.
    *
@@ -224,6 +227,19 @@ export async function exploreApp(
 ): Promise<ExploreResult> {
   const refusal = await refusedByPlatform(env, options);
   if (refusal !== undefined) throw new Error(refusal);
+  // The platform's Harness with no persona named: it proposes the people worth being, and each is
+  // driven in turn. Narrated into the HUD's Agent Log as a plan, so the person watching sees which
+  // journey is running and which proved.
+  const platform = serverOptionsFromEnv(env);
+  if (
+    options.focus === undefined &&
+    platform !== undefined &&
+    SERVER_DRIVER === (options.driverName ?? env[ReticleEnv.HARNESS_DRIVER])
+  ) {
+    const about = planAsText(await readPlan(deps, options.sessionId));
+    const personas = await proposePersonas(platform, about);
+    if (0 < personas.length) return explorePersonas(deps, env, options, personas);
+  }
 
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
   const before = new Set(await deps.flows.list());
@@ -289,6 +305,62 @@ export async function exploreApp(
     ...reconciled.rewroteFlows,
   ]);
   return { drive, plan, driverName: built.name, ...reconciled, unverifiedFlows, goals };
+}
+
+/** Drive each proposed persona in turn, and fold their results into one answer. */
+async function explorePersonas(
+  deps: ToolDeps,
+  env: Record<string, string | undefined>,
+  options: ExploreOptions,
+  personas: readonly Persona[],
+): Promise<ExploreResult> {
+  const narrate = (text: string): void => {
+    try {
+      deps.sessions.resolve(options.sessionId).pushNarration(text);
+    } catch {
+      /* nobody is watching: the plan still runs */
+    }
+  };
+  narrate(`Plan · ${String(personas.length)} personas: ${personas.map((p) => p.name).join(', ')}`);
+  const results: ExploreResult[] = [];
+  const lines: string[] = [];
+  for (const persona of personas) {
+    narrate(`▸ ${persona.name}: ${persona.journey}`);
+    const result = await exploreApp(deps, env, {
+      ...options,
+      focus: `${persona.name}: ${persona.journey}`,
+    });
+    results.push(result);
+    const mark = result.drive.proved ? '✓' : '○';
+    const line = `${mark} ${persona.name} — ${result.drive.proved ? 'proved' : 'not proved'} (${result.drive.stopReason})`;
+    lines.push(line);
+    narrate(line);
+  }
+  const last = results[results.length - 1] ?? (await exploreApp(deps, env, { ...options }));
+  const sum = (pick: (r: ExploreResult) => number): number =>
+    results.reduce((n, r) => n + pick(r), 0);
+  return {
+    ...last,
+    drive: {
+      ...last.drive,
+      steps: sum((r) => r.drive.steps),
+      proved: results.some((r) => r.drive.proved),
+      summary: [`Plan · ${String(personas.length)} personas`, ...lines, last.drive.summary].join(
+        '\n',
+      ),
+      usage: {
+        input: sum((r) => r.drive.usage.input),
+        output: sum((r) => r.drive.usage.output),
+        cacheRead: sum((r) => r.drive.usage.cacheRead),
+        cacheWrite: sum((r) => r.drive.usage.cacheWrite),
+      },
+    },
+    savedFlows: [...new Set(results.flatMap((r) => r.savedFlows))],
+    rewroteFlows: [...new Set(results.flatMap((r) => r.rewroteFlows))],
+    unverifiedFlows: [...new Set(results.flatMap((r) => r.unverifiedFlows))],
+    goals: results.flatMap((r) => r.goals),
+    planLines: [`Plan · ${String(personas.length)} personas`, ...lines],
+  };
 }
 
 /**

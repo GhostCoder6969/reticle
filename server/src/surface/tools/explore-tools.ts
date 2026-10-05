@@ -104,13 +104,21 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
       const driver = args['driver'];
-      const { drive, savedFlows, rewroteFlows, unverifiedFlows, driverName, plan, goals } =
-        await exploreApp(deps, env, {
-          ...('string' === typeof persona ? { focus: persona } : {}),
-          ...('number' === typeof maxSteps ? { maxSteps } : {}),
-          ...('string' === typeof sessionId ? { sessionId } : {}),
-          ...('string' === typeof driver ? { driverName: driver } : {}),
-        });
+      const {
+        drive,
+        savedFlows,
+        rewroteFlows,
+        unverifiedFlows,
+        driverName,
+        plan,
+        goals,
+        planLines,
+      } = await exploreApp(deps, env, {
+        ...('string' === typeof persona ? { focus: persona } : {}),
+        ...('number' === typeof maxSteps ? { maxSteps } : {}),
+        ...('string' === typeof sessionId ? { sessionId } : {}),
+        ...('string' === typeof driver ? { driverName: driver } : {}),
+      });
       return {
         stopReason: drive.stopReason,
         driver: driverName,
@@ -124,6 +132,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         // Derived, not narrated. The driver's own `summary` is appended only when it said
         // something — it is the one part of this a model authored, so it goes last and is labelled.
         summary: [
+          ...(planLines ?? []),
           describeDrive(drive.toolCalls, [...savedFlows, ...rewroteFlows], unverifiedFlows),
           ...[unprovedGoals(goals)].filter((line): line is string => line !== undefined),
           ...(0 === drive.summary.length ? [] : [`The driver's own account: ${drive.summary}`]),
