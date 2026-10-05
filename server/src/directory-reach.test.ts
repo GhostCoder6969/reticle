@@ -690,6 +690,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    * guard is satisfied.
    */
   'page-commands': [],
+  // The platform's side of the Harness: a driver for the loop next door, and nothing else.
+  platform: ['harness'],
   tools: [
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
@@ -724,6 +726,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'fs',
     'gaps',
     'harness',
+    // The platform's Harness driver, chosen with the local ones when a drive is built.
+    'platform',
     'impact',
     'input',
     'intent',

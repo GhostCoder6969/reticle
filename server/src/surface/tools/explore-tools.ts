@@ -46,7 +46,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .enum(DRIVER_NAMES)
         .optional()
         .describe(
-          'Which model drives. An unconfigured one is an error, never a substitution, so an A/B cannot measure the same driver twice. Omit for the default.',
+          'Which model drives. server is the platform; an unconfigured one is an error, not a substitute.',
         ),
       sessionId: z
         .string()

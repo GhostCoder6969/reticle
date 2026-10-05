@@ -8,6 +8,7 @@
  * deterministically with no model in the loop at all.
  */
 
+import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { ReticleEnv, ReticleTool, asProjectId, cloudUrlFrom, asRecord } from '@reticlehq/core';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -24,6 +25,7 @@ import {
   DRIVER_NAMES,
   JEV_DRIVER_NAME,
   OPENAI_DRIVER_NAME,
+  SERVER_DRIVER,
 } from '@/features/harness/drivers.js';
 import { jevDriver, jevOptionsFromEnv, type DrivePlanStep } from '@/features/harness/jev-driver.js';
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
@@ -243,7 +245,7 @@ export async function exploreApp(
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, plan, requested, fills)
+      ? buildDriver(env, maxSteps, plan, requested, fills, options.focus)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
@@ -644,6 +646,51 @@ function pinned(options: ExploreOptions): { sessionId?: string } {
  * people — and the reason this driver is worth having at all.
  */
 function buildDriver(
+  env: Record<string, string | undefined>,
+  maxSteps: number,
+  plan: HarnessPlan,
+  requested?: string,
+  fills?: FillValueStore,
+  persona?: string,
+): { driver: ModelDriver; name: string } {
+  const local = (): { driver: ModelDriver; name: string } =>
+    buildLocalDriver(env, maxSteps, plan, requested, fills);
+  const platform = serverOptionsFromEnv(env);
+  // The platform's Harness is the paid product: a linked machine with no provider key of its own
+  // drives through it. Asked for by name it must be configured; it is never a quiet substitution.
+  const ownKey =
+    harnessKeyOf(env, ReticleEnv.HARNESS_KEY) ||
+    harnessKeyOf(env, ReticleEnv.HARNESS_JEV_KEY) ||
+    harnessKeyOf(env, ReticleEnv.HARNESS_OPENAI_KEY);
+  const wantsServer =
+    SERVER_DRIVER === requested ||
+    ((requested === undefined || 0 === requested.length) && platform !== undefined && !ownKey);
+  if (!wantsServer) return local();
+  if (platform === undefined) throw new Error(MSG_NO_HARNESS_KEY);
+  let fallback: ModelDriver | undefined;
+  try {
+    fallback = SERVER_DRIVER === requested ? undefined : local().driver;
+  } catch {
+    fallback = undefined;
+  }
+  return {
+    driver: serverDriver({
+      ...platform,
+      ...(persona === undefined ? {} : { persona }),
+      plan: planAsText(plan),
+      maxSteps,
+      ...(fallback === undefined ? {} : { fallback }),
+    }),
+    name: SERVER_DRIVER,
+  };
+}
+
+function harnessKeyOf(env: Record<string, string | undefined>, name: string): boolean {
+  const value = env[name];
+  return value !== undefined && 0 < value.length;
+}
+
+function buildLocalDriver(
   env: Record<string, string | undefined>,
   maxSteps: number,
   plan: HarnessPlan,
