@@ -34,6 +34,12 @@ export interface RecordedStep {
   endPage?: string;
   /** Why the agent took this step: the `intent` it declared on the action. Names the saved flow. */
   intent?: string;
+  /**
+   * Why a consequence this step PROVED is not in the flow: the flow file could not express it (a
+   * session ref such as `e12` means nothing on a later page). Said at stop, so a weaker flow is
+   * never saved silently.
+   */
+  unkeptExpect?: string;
 }
 
 interface ActiveRecording {

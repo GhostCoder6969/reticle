@@ -96,6 +96,11 @@ export function pathOf(url: string | undefined): string | undefined {
   }
 }
 
+/** What a saved flow could not keep, and the fix. See RecordedStep.unkeptExpect. */
+export const UNKEPT_EXPECT =
+  'its proved `until` names something a saved flow cannot replay (a session ref such as e12): ' +
+  'name the element by testid, role and name, or text, and the check is kept';
+
 /**
  * Capture an act into every in-flight recording, or do nothing when none is running.
  *
@@ -129,8 +134,10 @@ export function captureAct(
   // success means — the large majority of calls carry one — and dropping it produced a flow graded
   // "assertion-free: it will pass even if the feature is broken", which is the regression-suite
   // story failing at its last step. See enforceableExpect below.
-  const expect = enforceableExpect(args['until'] ?? args['predicate']);
+  const declared = args['until'] ?? args['predicate'];
+  const expect = enforceableExpect(declared);
   if (expect !== undefined) step.expect = expect;
+  else if (declared !== undefined) step.unkeptExpect = UNKEPT_EXPECT;
   if (route !== undefined) step.page = route;
   const intent = asString(args['intent'])?.trim();
   if (intent !== undefined && intent.length > 0) step.intent = intent;

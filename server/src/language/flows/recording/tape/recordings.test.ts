@@ -282,3 +282,21 @@ describe('captureAssertion', () => {
     expect(store.active()).toEqual([]);
   });
 });
+
+// #988: a proved `until` the flow file cannot express was dropped and the flow saved weaker, silently.
+describe('a proved check the flow cannot keep', () => {
+  it('is marked on the step, so stop can say so', () => {
+    const store = new RecordingStore();
+    store.start('f', 0, '/', 's1');
+    captureAct(
+      store,
+      { ref: 'e3', action: 'click', until: { kind: 'element', query: { ref: 'e12' } } },
+      { target: { testid: 'save' } },
+      '/',
+      's1',
+    );
+    const rec = store.stop('f');
+    expect(rec?.steps[0]?.expect).toBeUndefined();
+    expect(rec?.steps[0]?.unkeptExpect).toContain('session ref');
+  });
+});
