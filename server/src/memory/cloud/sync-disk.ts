@@ -10,6 +10,7 @@
  * one unsynced record, not a crashed sync. There is no state here worth defending against a parse
  * error — the file will be rewritten on the next tool call anyway.
  */
+import { shareableRun } from '@reticlehq/core/artifacts';
 import {
   existsSync,
   mkdirSync,
@@ -177,7 +178,8 @@ export function diskSource(reticleRoot: string): SyncSource {
       readJsonDir(join(reticleRoot, ReticleDir.RUNS_SUBDIR))
         .map((payload) => {
           const id = (payload as { runId?: unknown } | null)?.runId;
-          return 'string' === typeof id ? { runId: id, payload } : undefined;
+          // The prompt context leaves the machine only when the project opted in.
+          return 'string' === typeof id ? { runId: id, payload: shareableRun(payload) } : undefined;
         })
         // A run artifact with no id cannot be diffed against the server's list, so sending it would
         // mean re-sending it every cycle forever. Dropped rather than uploaded repeatedly.

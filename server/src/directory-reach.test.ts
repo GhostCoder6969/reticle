@@ -455,7 +455,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // and sharing the shaper is what stops `scroll: true` being a different tool wearing one name.
   // One way only — `read` reaches nothing, which is the property that keeps it movable.
   input: ['args', 'pool', 'telemetry', 'tools'],
-  intent: ['dir', 'fs', 'machine', 'project', 'tools'],
+  // `telemetry` for the one free-text redactor (credentials and personal data out of what a person
+  // wrote), shared with feedback reports: a relayed user request is the same kind of text.
+  intent: ['dir', 'fs', 'machine', 'project', 'telemetry', 'tools'],
   // What a run artifact is FOR once it exists -- stored, compared, and read back as established
   // fact -- as against the rest of `runs`, which produces one. Named `artifact`, singular, and it
   // must stay singular: `core/src/artifacts` is a different package and a different node, and

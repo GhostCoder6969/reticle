@@ -49,7 +49,11 @@ export interface ReticleDirPaths {
   coverage: string;
   /**.../.reticle/assertion-tiers.json (last-passing assertion tiers; anti-reward-hacking baseline) */
   tiers: string;
+  /**.../.reticle/intent/request.json (the user's latest request, relayed by the agent, classified) */
+  request: string;
 }
+
+const REQUEST_FILE = 'request.json';
 
 export function reticleDirPaths(root: string): ReticleDirPaths {
   return {
@@ -70,6 +74,7 @@ export function reticleDirPaths(root: string): ReticleDirPaths {
     flake: join(root, ReticleDir.FLAKE_FILE),
     coverage: join(root, ReticleDir.COVERAGE_FILE),
     tiers: join(root, ReticleDir.TIERS_FILE),
+    request: join(root, ReticleDir.INTENT_SUBDIR, REQUEST_FILE),
   };
 }
 

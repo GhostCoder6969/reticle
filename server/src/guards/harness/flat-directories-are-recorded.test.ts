@@ -129,7 +129,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * leaf the browser can import without the schemas is still the right shape, and the guard's
    * ceiling was raised with that reasoning written beside it.
    */
-  'core/src/artifacts': 15,
+  'core/src/artifacts': 16,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,

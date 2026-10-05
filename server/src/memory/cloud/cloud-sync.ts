@@ -8,6 +8,7 @@
  * Sync is best-effort: a network failure NEVER fails the local save. The flow is already on disk; the
  * cloud copy is an enhancement, so a push error is logged and swallowed.
  */
+import { shareableRun } from '@reticlehq/core/artifacts';
 import { z } from 'zod';
 import {
   VERIFY_PROGRESS_MAX_EVENTS,
@@ -212,7 +213,8 @@ export async function syncRunToCloud(
         'content-type': 'application/json',
         authorization: `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify(run),
+      // The prompt context leaves the machine only when the project opted in.
+      body: JSON.stringify(shareableRun(run)),
     });
     return res.ok
       ? { outcome: SyncOutcome.SYNCED, status: res.status }

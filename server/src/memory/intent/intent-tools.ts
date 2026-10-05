@@ -1,4 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
+import {
+  StatementSource,
+  classifyStatement,
+  splitStatements,
+  type PromptContext,
+} from '@reticlehq/core/artifacts';
+import { redactFeedbackText } from '@/telemetry/feedback.js';
+import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { IntentStore } from './intent-store.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
@@ -38,7 +48,7 @@ export const INTENT_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.INTENT,
     description:
-      'Record what a change is SUPPOSED to make true, as a durable statement ABOUT THE PRODUCT that a teammate who was not here will understand in six months — name the behaviour, not this run or its step number, and never "renders cleanly", which nothing can check. It is SHARED memory: pooled per project and read back by later agents. Capture it while you still know — then verification does not have to re-derive it from the DOM later. { action:"declare", intents:[{ id, statement, surface? }] } takes prose and needs NO predicate: at declare time there is often no route, no ref and no code yet, and a predicate demanded there is just a mechanism. Declare EARLY (as you build) and batch them — one call per feature is the whole budget. { action:"bind", id, binding } attaches the predicate that would prove it once you know how; an intent with no binding is not a failure, it is the most interesting row in the ledger — something meant that nothing can currently prove. { action:"list" } returns what is still open. Stored in .reticle/intent/<subject>/intent.json (a flow name is its subject), git-checked so a human sees in review if an intent was later narrowed to match what was easy to prove.',
+      'Record what a change is SUPPOSED to make true, as a durable statement ABOUT THE PRODUCT that a teammate who was not here will understand in six months — name the behaviour, not this run or its step number, and never "renders cleanly", which nothing can check. It is SHARED memory: pooled per project and read back by later agents. Capture it while you still know — then verification does not have to re-derive it from the DOM later. { action:"declare", intents:[{ id, statement, surface? }] } takes prose and needs NO predicate: at declare time there is often no route, no ref and no code yet, and a predicate demanded there is just a mechanism. Declare EARLY (as you build) and batch them — one call per feature is the whole budget. { action:"bind", id, binding } attaches the predicate that would prove it once you know how; an intent with no binding is not a failure, it is the most interesting row in the ledger — something meant that nothing can currently prove. { action:"list" } returns what is still open. Pass `request` (what the user asked, verbatim) once per task. Stored in .reticle/intent/, git-checked.',
     example: {
       action: DECLARE,
       intents: [
@@ -82,6 +92,7 @@ export const INTENT_TOOLS: ToolDef[] = [
         .min(1)
         .optional()
         .describe('declare only. Batchable — declare every intent for a feature in one call.'),
+      request: z.string().optional().describe("declare: the user's words, verbatim."),
       id: z.string().optional().describe('bind only: which intent the predicate proves.'),
       /*
        * The predicate schema, not `unknown`.
@@ -168,6 +179,11 @@ export const INTENT_TOOLS: ToolDef[] = [
         return { intents: await store.open() };
       }
       const raw = args['intents'];
+      const request = asString(args['request']);
+      if (request !== undefined && 0 < request.trim().length) {
+        await recordRequest(deps, root, request, Array.isArray(raw) ? raw : []);
+        if (!Array.isArray(raw) || 0 === raw.length) return { request: 'recorded', path: root };
+      }
       // Refused, not read as an empty list: `declare` with nothing to declare stored nothing and
       // answered `{ intents: [] }`, which an agent reads as a declaration that worked (#1118).
       if (!Array.isArray(raw) || 0 === raw.length) {
@@ -186,3 +202,63 @@ export const INTENT_TOOLS: ToolDef[] = [
     },
   },
 ];
+
+const MAX_REQUEST = 4000;
+const MAX_STATEMENT = 500;
+const MAX_STATEMENTS = 50;
+const PROJECT_CONFIG = '.reticle.json';
+
+/** Credentials and personal data out, length capped: the same rules feedback reports follow. */
+function redactSecrets(text: string, max: number): string {
+  return redactFeedbackText(text, max).text;
+}
+
+/** Whether the project opted in to keeping requests on the platform: `"shareRequests": true`. */
+function sharesRequests(projectDir: string): boolean {
+  try {
+    const config: unknown = JSON.parse(readFileSync(join(projectDir, PROJECT_CONFIG), 'utf8'));
+    return true === (config as { shareRequests?: unknown } | null)?.shareRequests;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keep the user's request, and every statement in it and in the declared intents, classified and
+ * attributed, for the runs that verify it. Secrets are redacted before anything is written.
+ *
+ * Shared with the platform only when the project says so: `"shareRequests": true` in .reticle.json.
+ */
+async function recordRequest(
+  deps: ToolDeps,
+  root: string,
+  request: string,
+  declared: readonly unknown[],
+): Promise<void> {
+  const text = redactSecrets(request, MAX_REQUEST);
+  const agentStatements = declared.flatMap((d) => {
+    const statement = (d as { statement?: unknown } | null)?.statement;
+    return 'string' === typeof statement ? [statement] : [];
+  });
+  const context: PromptContext = {
+    request: text,
+    statements: [
+      ...splitStatements(text).map((t) => ({ text: t, source: StatementSource.USER })),
+      ...agentStatements.map((t) => ({
+        text: redactSecrets(t, MAX_STATEMENT),
+        source: StatementSource.AGENT,
+      })),
+    ]
+      .slice(0, MAX_STATEMENTS)
+      .map((s) => ({
+        ...s,
+        text: s.text.slice(0, MAX_STATEMENT),
+        kind: classifyStatement(s.text),
+      })),
+    at: deps.now(),
+    shared: sharesRequests(dirname(root)),
+  };
+  const path = reticleDirPaths(root).request;
+  await deps.fs.mkdir(dirname(path));
+  await deps.fs.writeFile(path, `${JSON.stringify(context, null, 2)}\n`);
+}
