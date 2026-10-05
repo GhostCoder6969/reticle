@@ -52,17 +52,11 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 
 The installer installs the `reticle` CLI, registers its MCP server with supported agents, and configures approval for Reticle's own tools where the agent supports it. **Run it in a terminal before opening your coding agent.** If your agent is already open, restart it once so it loads the new tools. Codex CLI needs a manual TOML entry; the installer prints the exact lines and location.
 
-### 2. Wire your app
+### 2. Ask your agent
 
-From your app's directory, run:
+Installing changed nothing in your app. Open your coding agent in the app's directory and ask: _“Verify one flow in my running app with Reticle.”_ The first time it uses Reticle there, Reticle wires the app itself: it installs the dev-only SDK, wires your build config, starts your dev server, and tells your agent every file it changed. No account needed, and nothing from your project leaves your machine.
 
-```bash
-RETICLE_INSTALL_SOURCE=readme reticle init
-```
-
-This installs the dev-only SDK, wires your build config, starts your dev server, and proves that the app connected. No account needed, and nothing from your project leaves your machine. To preview the app changes first, run `reticle init --dry-run`. The `RETICLE_INSTALL_SOURCE` prefix is optional; it only tells us which page you installed from.
-
-Skip this step and your agent will remind you: when it starts in a web app Reticle has never connected to, it says so in its first reply and offers to run `init`, in Claude Code, Codex, Cursor and any other agent that reads MCP server instructions.
+To wire it yourself instead, or to preview the changes first, run `RETICLE_INSTALL_SOURCE=readme reticle init` (or `reticle init --dry-run`) in the app's directory. The `RETICLE_INSTALL_SOURCE` prefix is optional; it only tells us which page you installed from.
 
 **Want a dashboard?** Run `reticle connect --project "My App"` instead, or afterwards. It does everything `init` does, then opens a browser for sign-in approval, links this folder to your cloud project, and sends any Reticle history already on this machine. Approve the short code shown in both the browser and terminal; you do not need to copy an API key. [See exactly what can sync](docs/what-is-recorded.md).
 
@@ -73,7 +67,7 @@ reticle doctor    # is the app connected?
 reticle whoami    # which cloud project is this folder linked to?
 ```
 
-Open or restart your coding agent, then ask: _“Verify one flow in my running app with Reticle.”_ Reticle returns a pass, fail, or couldn't-tell verdict with evidence. Your dashboard fills after the first recorded run; a new app has no results to sync yet. If your dev server was already running before Reticle wired it, restart that server once to load the new config.
+Reticle returns a pass, fail, or couldn't-tell verdict with evidence. Your dashboard fills after the first recorded run; a new app has no results to sync yet. If your dev server was already running before Reticle wired it, restart that server once to load the new config.
 
 <a id="manual-install"></a>
 <details>
@@ -92,7 +86,7 @@ Step 2 registers the same agents as the installer, writes the `/reticle` skill w
 { "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }
 ```
 
-Then run `reticle init` in your app directory, or `reticle connect --project "My App"` to also link a cloud dashboard.
+Then ask your agent to verify a flow, and the first run wires the app; or run `reticle init` in your app directory yourself, or `reticle connect --project "My App"` to also link a cloud dashboard.
 
 </details>
 

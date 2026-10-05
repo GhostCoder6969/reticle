@@ -8,7 +8,13 @@ This file is the whole critical path and nothing else. Everything it leaves out 
 
 Do not spend a turn working out which path you are on.
 
-**`reticle_*` tools visible?** The machine is set up. Go straight to the project:
+**`reticle_*` tools visible?** The machine is set up; installing changed no app. In the project, call:
+
+```
+reticle_session { action: "list" }
+```
+
+On a never-connected project that call runs `init` itself and lists the files it changed under `wired`; tell the user. If it answers `run_init`, the daemon was started outside the project: run this in the app's directory:
 
 ```bash
 RETICLE_INSTALL_SOURCE=skill_file npx @reticlehq/server@latest init
@@ -23,7 +29,7 @@ irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1
 
 It registers the MCP server with the coding agents it finds and, where an agent has a per-server approval rule (Claude Code, for one), pre-approves Reticle's own tools. They reopen this client and the tools are there. If they want to choose each step instead, the manual install is `https://docs.reticle.sh/install-manual.md`. Do not register it yourself and then work around your client not having reloaded: that is the sequence that breaks.
 
-`init` is ONBOARDING, and where it stops: wire, boot, wait for a session. Idempotent, reporting `·` for what is already there. Two things it cannot do for you, in this order:
+`init`, whether the first session call runs it or you do, is ONBOARDING, and where it stops: wire, boot, wait for a session. Idempotent, reporting `·` for what is already there. Two things it cannot do for you, in this order:
 
 1. **Restart the dev server if one was already running when `init` ran.** It read the build config at boot; `init` edited that file afterwards, so the process keeps serving a bundle with no SDK in it. Restart, then hard-reload the tab. A 100% failure, not an intermittent one, and the largest single cause of a correct install that finds nothing connected.
 2. **Confirm rather than assume:** `reticle_session { action: "list" }`. One session listed is the proof the SDK reached the page. An empty list carries a `why` that names which cause this is; read it before changing anything.
@@ -42,7 +48,7 @@ Everything between here and there is a rule the steps assume. Read it as you go,
 
 **Setup is not complete until you have driven one real flow in the user's app and produced a verdict.** Writing config files is not installed. Every earlier point looks like success and is not:
 
-- `init` exited 0. Wired, and connected. Nothing is PROVED: that is the first run.
+- `init` exited 0, or the first session call came back `wired`. Wired, and connected. Nothing is PROVED: that is the first run.
 - The `reticle_*` tools appeared. Your client can reach a daemon. The app is very likely still uninstrumented.
 - A session is listed. The app dialled in. The user has still seen nothing happen.
 
