@@ -12,6 +12,7 @@
  */
 
 import { z } from 'zod';
+import { unprovedGoals } from '@/features/harness/goals.js';
 import { ReticleTool, asRecord } from '@reticlehq/core';
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
@@ -36,13 +37,11 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Who to be, or what to accomplish. A journey ("sign up, then invite a teammate") drives far better than no focus at all.',
+          'Who to be or what to do; double-quoted text must show at the end (each is checked).',
         ),
       maxSteps: stepCountSchema
         .optional()
-        .describe(
-          'Ceiling on model turns. Bounds cost, not value — the drive is graded however it ends.',
-        ),
+        .describe('Ceiling on model turns; the drive is graded however it ends.'),
       driver: z
         .enum(DRIVER_NAMES)
         .optional()
@@ -69,6 +68,8 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       unverifiedFlows: z.array(z.string()),
       /** Whether the drive ran at least one check. A drive that did not proved nothing. */
       proved: z.boolean(),
+      /** One verdict per requested goal, checked by the harness itself. Only `yes` is proved. */
+      goals: z.array(z.object({ text: z.string(), verified: z.string() })),
       /**
        * What the drive set out to do, read from `.reticle` BEFORE it started — every recorded
        * journey with the consequence that must still hold, and the declared intent nobody has
@@ -103,7 +104,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
       const driver = args['driver'];
-      const { drive, savedFlows, rewroteFlows, unverifiedFlows, driverName, plan } =
+      const { drive, savedFlows, rewroteFlows, unverifiedFlows, driverName, plan, goals } =
         await exploreApp(deps, env, {
           ...('string' === typeof persona ? { focus: persona } : {}),
           ...('number' === typeof maxSteps ? { maxSteps } : {}),
@@ -118,11 +119,13 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         rewroteFlows: [...rewroteFlows],
         unverifiedFlows: [...unverifiedFlows],
         proved: drive.proved,
+        goals: [...goals],
         plan: { summary: plan.summary, steps: [...plan.steps] },
         // Derived, not narrated. The driver's own `summary` is appended only when it said
         // something — it is the one part of this a model authored, so it goes last and is labelled.
         summary: [
           describeDrive(drive.toolCalls, [...savedFlows, ...rewroteFlows], unverifiedFlows),
+          ...[unprovedGoals(goals)].filter((line): line is string => line !== undefined),
           ...(0 === drive.summary.length ? [] : [`The driver's own account: ${drive.summary}`]),
         ].join('\n'),
         ...(drive.error === undefined ? {} : { error: drive.error }),

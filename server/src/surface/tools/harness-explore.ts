@@ -45,11 +45,14 @@ import {
   type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleToolset } from './harness-toolset.js';
+import { checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
 import { secretEnvKey } from '@/language/flows/flows.js';
 
 export interface ExploreOptions {
   /** Who to be, or what to accomplish. Appended to the standing instruction. */
   focus?: string;
+  /** Texts the drive must leave on the page. Default: whatever `focus` quoted. See goals.ts. */
+  goals?: readonly string[];
   /** Pinned tab, when the app has more than one connected. */
   sessionId?: string;
   /** Hard ceiling on model turns. Bounds cost, not value — the drive is usable however it ends. */
@@ -103,6 +106,8 @@ export interface ExploreResult {
    * journeys under the same names — so this is the ordinary case, not the corner one.
    */
   rewroteFlows: readonly string[];
+  /** One verdict per goal, checked by the harness after the drive rather than taken on its word. */
+  goals: readonly GoalCheck[];
   /**
    * Which driver actually drove.
    *
@@ -263,6 +268,10 @@ export async function exploreApp(
   // drove unsaved — work paid for and thrown away. Saving is not a decision any model gets to make
   // and not something a step budget gets to cut off, so it happens here, after the loop, always.
   await bankOpenRecording(toolset, drive, options.focus);
+  const goals = await checkGoals(
+    (name, args) => toolset.invoke(name, args),
+    options.goals ?? goalsIn(options.focus),
+  );
 
   const after = await deps.flows.list();
   const reconciled = reconcileFlows(before, after, drive.toolCalls);
@@ -277,7 +286,7 @@ export async function exploreApp(
     ...reconciled.savedFlows,
     ...reconciled.rewroteFlows,
   ]);
-  return { drive, plan, driverName: built.name, ...reconciled, unverifiedFlows };
+  return { drive, plan, driverName: built.name, ...reconciled, unverifiedFlows, goals };
 }
 
 /**
