@@ -394,8 +394,9 @@ export const ReticleDir = {
   /**
    * the user's own record of what Reticle has done for them — .reticle/impact.json.
    *
-   * Local only, never uploaded, and deliberately NOT part of telemetry: telemetry answers questions
-   * about the product; this answers the user's question about their own work.
+   * NOT telemetry: telemetry answers questions about the product; this answers the user's question
+   * about their own work. A linked project's copy syncs to the user's own dashboard (the sync cycle's
+   * `impact` kind); the machine-wide copy in `~/.reticle` never leaves the machine.
    */
   IMPACT_FILE: 'impact.json',
   /** what changes were SUPPOSED to make true —.reticle/intent.json (git-checked, reviewed) */

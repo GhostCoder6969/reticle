@@ -24,12 +24,13 @@ import {
 /**
  * Where Reticle keeps the record of what it has done for you.
  *
- * Two scopes, two files, both local and never uploaded: the project's own `.reticle/impact.json`,
- * and a machine-wide `~/.reticle/impact.json` that answers "what has Reticle done for me overall"
- * across every app you have instrumented.
+ * Two scopes, two files: the project's own `.reticle/impact.json`, and a machine-wide
+ * `~/.reticle/impact.json` that answers "what has Reticle done for me overall" across every app you
+ * have instrumented.
  *
- * This is NOT telemetry. Telemetry answers our questions about the product and leaves the machine;
- * this answers the user's question about their own work and never does.
+ * This is NOT telemetry. Telemetry answers our questions about the product; this answers the user's
+ * question about their own work. A linked project's record syncs to that user's own dashboard (the
+ * sync cycle's `impact` kind); the machine-wide record never leaves the machine.
  */
 
 /** Writes are debounced: a verification loop is 50-200 calls, and each one is a counter bump. */

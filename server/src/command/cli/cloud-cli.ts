@@ -496,8 +496,9 @@ const cmdLink = async (argv: readonly string[]): Promise<number> => {
    */
   if (!(await createNodeFileSystem().exists(join(process.cwd(), RETICLE_CONFIG_BASENAME)))) {
     hint(
-      `no ${RETICLE_CONFIG_BASENAME} here, so this app announces no project — its runs will not be ` +
-        'attributed to this binding. Run `reticle init` in the app, then restart the dev server.',
+      `no ${RETICLE_CONFIG_BASENAME} here: this app's runs reach this binding only while its dev ` +
+        'server runs with the Reticle build plugin, which announces it. Run `reticle init` in the app ' +
+        'to make the binding hold without it.',
     );
   }
   return 0;
