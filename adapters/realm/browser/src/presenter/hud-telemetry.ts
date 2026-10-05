@@ -15,6 +15,8 @@ import { CHAT_ATTR, MIN_ATTR, REPORT_ATTR, SETTINGS_ATTR } from './presenter-con
  */
 
 const PREFIX = 'data-reticle-';
+/** Set on the root while the Flows or Notes page covers the Agent Log. */
+const PAGE_OPEN_ATTR = 'data-reticle-page-open';
 const TOGGLE_ROLES = new Set(['switch', 'checkbox']);
 
 /** The control id an element is named by, or undefined when it is not one of the HUD's controls. */
@@ -46,6 +48,10 @@ function viewOf(root: Element): { view: HudView; panel: HudPanel } {
   if ('1' === root.getAttribute(REPORT_ATTR)) {
     return { view: HudView.EXPANDED, panel: HudPanel.REPORT };
   }
+  // The Flows and Notes pages open over the Agent Log, with or without its own attribute set.
+  const page = root.getAttribute(PAGE_OPEN_ATTR);
+  if ('flows' === page) return { view: HudView.EXPANDED, panel: HudPanel.FLOWS };
+  if ('annotations' === page) return { view: HudView.EXPANDED, panel: HudPanel.NOTES };
   if ('1' === root.getAttribute(CHAT_ATTR)) return { view: HudView.EXPANDED, panel: HudPanel.CHAT };
   return { view: HudView.COLLAPSED, panel: HudPanel.NONE };
 }
@@ -90,7 +96,7 @@ export function installHudTelemetry(
   const observer = new MutationObserver(onChange);
   observer.observe(root, {
     attributes: true,
-    attributeFilter: [MIN_ATTR, CHAT_ATTR, SETTINGS_ATTR, REPORT_ATTR],
+    attributeFilter: [MIN_ATTR, CHAT_ATTR, SETTINGS_ATTR, REPORT_ATTR, PAGE_OPEN_ATTR],
   });
   onChange();
   return () => {

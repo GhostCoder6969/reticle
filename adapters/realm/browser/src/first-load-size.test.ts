@@ -304,7 +304,13 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  *
  * Raised by 1,000 over the measurement (247,238), rounded down to the hundred, per the note above.
  */
-const MAX_FIRST_LOAD_BYTES = 248_200;
+const MAX_FIRST_LOAD_BYTES = 248_300;
+/*
+ * Raised 248_200 -> 248_300 for the HUD's per-page time: `HudPanel` gained `flows` and `notes`, the
+ * two pages that open inside the Agent Log. The enum is in the wire schema that validates every
+ * `hud.used` event, so it loads with the page. Measured 248,212 on this commit. The notices schema
+ * that landed beside it costs nothing here: it is on the lazy `@reticlehq/core/hud` subpath.
+ */
 /*
  * Raised a fifth time, 233_300 -> 233_400, for a route to be assertable in a SAVED flow. 57 B.
  *

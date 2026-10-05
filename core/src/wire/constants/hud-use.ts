@@ -13,9 +13,15 @@ export const HudView = {
 } as const;
 export type HudView = (typeof HudView)[keyof typeof HudView];
 
-/** Which panel is showing, when the HUD is open. */
+/**
+ * Which page is showing, when the HUD is open: the Agent Log (`chat`), the Flows and Notes pages
+ * inside it, Impact (`report`) or Settings. Timed per page, so how long somebody spends on each is a
+ * number rather than a guess.
+ */
 export const HudPanel = {
   CHAT: 'chat',
+  FLOWS: 'flows',
+  NOTES: 'notes',
   SETTINGS: 'settings',
   REPORT: 'report',
   NONE: 'none',
