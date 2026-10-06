@@ -37,9 +37,9 @@ const PAGE_PANEL_ATTR = 'data-reticle-page-panel';
 const OVERLAY = 'data-reticle-overlay';
 
 export const RAIL_TEXT = {
-  // "Try", not "unlock": Harness comes with a plan or trial, and signing in alone grants nothing.
+  // Signing in is the whole step: every workspace, Free included, gets Harness credits each month.
   TITLE: 'Sign in to try Reticle Harness',
-  DETAIL: 'Autonomous end-to-end checks on this app',
+  DETAIL: 'Free credits every month for autonomous end-to-end checks',
   CTA: 'Sign in',
 } as const;
 

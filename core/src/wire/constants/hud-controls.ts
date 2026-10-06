@@ -52,6 +52,7 @@ const PLAIN_CONTROLS = [
   'settings-help',
   'settings-reset',
   'settings-mcp',
+  'settings-kill',
   'feedback-email',
   'feedback-call',
   'workspace-btn',

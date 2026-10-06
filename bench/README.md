@@ -119,10 +119,9 @@ ANTHROPIC_API_KEY=sk-... node bench/harness/claude-agent-loop.mjs
 #     machine to a goal. No browser is involved, so nothing it prints may be quoted as a benchmark.
 JEV_API_KEY=... node bench/harness/jev-probe.mjs
 
-# 5c. The measurement that CAN be quoted: the same app, tools and loop driven by each model in turn,
-#     with only the ModelDriver differing. Writes JEV-SCORECARD.md's numbers. BENCH_REPEATS>1,
-#     because one run per arm measures one drive rather than a driver.
-ANTHROPIC_API_KEY=sk-... JEV_API_KEY=... BENCH_REPEATS=3 node bench/harness/jev-vs-llm.mjs
+# 5c. (Retired) The Jev-versus-LLM driver comparison measured drivers that ran in the daemon. The
+#     Harness now decides on the Reticle platform, so the comparison lives with the platform;
+#     JEV-SCORECARD.md keeps the numbers it produced.
 
 # 5d. Do the platform and the harness actually MEET? Drives a daemon holding only a platform key
 #     against a real app, with every provider key blanked. The hosted platform's own sync check

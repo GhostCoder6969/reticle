@@ -48,6 +48,37 @@ export interface DrivenStep {
   evidence: string[];
 }
 
+function refusedAsDestructive(call: ToolOutcome): boolean {
+  const error = asString(asRecord(call.result)['error']) ?? '';
+  return call.isError && error.includes(DESTRUCTIVE_REFUSAL);
+}
+
+/** Driving calls that ran with the destructive-action permission: these really changed the app. */
+export function confirmedDestructive(toolCalls: readonly ToolOutcome[]): number {
+  return toolCalls.filter(
+    (call) =>
+      DRIVING_TOOLS.has(call.name) &&
+      !call.isError &&
+      true === asRecord(asRecord(call.args)['args'])[DESTRUCTIVE_REFUSAL],
+  ).length;
+}
+
+/**
+ * A failed claim whose page then showed a dialog: the control opens a confirmation, and the drive
+ * guessed it would send the request itself. Reported as a defect, a row's "Refund" button that opens
+ * the "Refund now" dialog sent the caller looking for a dead control.
+ */
+function openedADialog(result: Record<string, unknown>, after: readonly ToolOutcome[]): string[] {
+  if (Verified.NO !== result['verified']) return [];
+  const next = after.find((call) => ReticleTool.SNAPSHOT === call.name);
+  const dialogs = asRecord(asRecord(next?.result)['status'])['visibleDialogs'];
+  return Array.isArray(dialogs) && 0 < dialogs.length
+    ? [
+        'it opened a dialog instead: likely the drive guessed the consequence wrong, not an app defect',
+      ]
+    : [];
+}
+
 /** Characters of a response body quoted in the evidence: enough for an error message. */
 const MAX_BODY_CHARS = 200;
 /** Contradictions quoted per step. */
@@ -81,8 +112,17 @@ function evidenceOf(result: Record<string, unknown>): string[] {
   return lines;
 }
 
+/** The permission a destructive action needs, named in the gate's refusal and carried on a retry. */
+const DESTRUCTIVE_REFUSAL = 'confirmDangerous';
+
 /** How many steps are listed before the account starts counting instead of naming. */
 const MAX_LISTED = 12;
+/**
+ * Failures are listed first, and up to this many of them however long the run. Listed in drive
+ * order, a whole-app run named 12 of 70 actions and left its failures in "… and 58 more", so the
+ * agent reading it could not say what any of them was.
+ */
+const MAX_FAILED = 40;
 
 /** Actions that change the app. Reads are not part of the story of what was driven. */
 const DRIVING_TOOLS = new Set<string>([
@@ -131,9 +171,6 @@ export const ReplayOutcome = {
   /** Stopped at a step the flow marks destructive: not run, which is not a regression. */
   GUARDED: 'guarded',
 } as const;
-
-/** The refusal a replay gives at a destructive step it was not told to confirm. */
-const DESTRUCTIVE_REFUSAL = 'confirmDangerous';
 
 export function replayedFlows(
   toolCalls: readonly ToolOutcome[],
@@ -189,10 +226,13 @@ function describeClaim(until: unknown): string | undefined {
 /** Reduce the raw call log to the actions that actually drove the app. */
 export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
   const steps: DrivenStep[] = [];
-  for (const call of toolCalls) {
+  for (const [index, call] of toolCalls.entries()) {
     if (!DRIVING_TOOLS.has(call.name)) continue;
     const args = asRecord(call.args);
     const result = asRecord(call.result);
+    // The gate's refusal never reached the app; listed beside the confirmed retry, it read as "the
+    // refund was blocked" to the agent reading this, about a refund that had gone through.
+    if (refusedAsDestructive(call)) continue;
     const action =
       ReticleTool.NAVIGATE === call.name ? 'navigate' : (asString(args['action']) ?? 'act');
     steps.push({
@@ -201,7 +241,9 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
       verified: call.isError ? 'error' : asString(result['verified']),
       because: call.isError ? asString(result['error']) : asString(result['because']),
       claimed: describeClaim(args['until']),
-      evidence: call.isError ? [] : evidenceOf(result),
+      evidence: call.isError
+        ? []
+        : [...evidenceOf(result), ...openedADialog(result, toolCalls.slice(index + 1))],
     });
   }
   return steps;
@@ -216,12 +258,17 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
  * rather than as a failure — it calls for a better check, not a code change, and collapsing the two
  * would send an agent to rewrite working code.
  */
+/** Every `__reticle_*` query parameter, wherever it sits in the route. */
+const RETICLE_PARAMS = /[?&]__reticle_[^&#]*/g;
+
 /** The pages the drive's own snapshots reported, in order, each distinct page once. */
 function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
   const pages: string[] = [];
   for (const call of toolCalls) {
     if (ReticleTool.SNAPSHOT !== call.name || call.isError) continue;
-    const route = asString(asRecord(asRecord(call.result)['status'])['route']);
+    const raw = asString(asRecord(asRecord(call.result)['status'])['route']);
+    // Reticle's own parameters (a leased tab's session and project) are not part of the page.
+    const route = raw?.replace(RETICLE_PARAMS, '').replace(/^\/\?(?=#|$)/, '/');
     if (route !== undefined && !pages.includes(route)) pages.push(route);
   }
   return pages;
@@ -329,7 +376,11 @@ export function describeDrive(
       : [`Reached ${String(pages.length)} page(s): ${pages.join(' → ')}.`]),
   ];
 
-  for (const step of steps.slice(0, MAX_LISTED)) {
+  const listed = [...failed, ...proved, ...undecided].slice(
+    0,
+    Math.max(MAX_LISTED, Math.min(failed.length, MAX_FAILED)),
+  );
+  for (const step of listed) {
     const verdict = step.verified ?? 'nothing declared';
     const because = step.because === undefined ? '' : ` — ${step.because}`;
     // The claim, on failures only: it is what separates "the app is broken" from "the drive guessed
@@ -344,7 +395,20 @@ export function describeDrive(
     lines.push(`  ${step.action} ${step.target}: ${verdict}${claimed}${because}`);
     for (const line of step.evidence) lines.push(`      ${line}`);
   }
-  if (MAX_LISTED < steps.length) lines.push(`  … and ${String(steps.length - MAX_LISTED)} more.`);
+  if (listed.length < steps.length) {
+    const unlistedFailed = Math.max(0, failed.length - MAX_FAILED);
+    lines.push(
+      `  … and ${String(steps.length - listed.length)} more` +
+        (0 === unlistedFailed
+          ? ', none of them failed.'
+          : `, ${String(unlistedFailed)} of them failed.`),
+    );
+  }
+  const confirmed = confirmedDestructive(toolCalls);
+  if (0 < confirmed)
+    lines.push(
+      `${String(confirmed)} destructive action(s) were confirmed and REALLY RAN against the app (the drive confirms one only after the gate refuses it; the refusal itself changed nothing).`,
+    );
 
   if (0 < failed.length)
     lines.push(

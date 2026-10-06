@@ -54,6 +54,10 @@ export const FlowAnchorSchema = z.discriminatedUnion('kind', [
     kind: z.literal(AnchorKind.ROLE),
     role: z.string().min(1),
     name: z.string().optional(),
+    // Which of several same-named controls was recorded, in page order, and how many there were.
+    // Honoured only while the page still has exactly `of` of them; otherwise the step is ambiguous.
+    nth: z.number().int().min(0).optional(),
+    of: z.number().int().min(2).optional(),
   }),
   z.object({ kind: z.literal(AnchorKind.SIGNAL), name: z.string().min(1) }),
   // Auto-anchor: re-find an element by component identity / source location when it has no testid.

@@ -121,6 +121,17 @@ describe('the account an agent reads', () => {
     expect(summary).toContain('and 8 more');
   });
 
+  /** From a recorded whole-app run: its failures sat in "… and 58 more", unreadable. */
+  it('lists every failure first, however long the run', () => {
+    const steps = [
+      ...Array.from({ length: 20 }, (_, i) => acted(`ok ${String(i)}`, 'yes')),
+      ...Array.from({ length: 15 }, (_, i) => acted(`bad ${String(i)}`, 'no')),
+    ];
+    const summary = describeDrive(steps, []);
+    for (let i = 0; i < 15; i += 1) expect(summary).toContain(`bad ${String(i)}`);
+    expect(summary).toContain('and 20 more, none of them failed');
+  });
+
   it('names a navigation by where it went', () => {
     const summary = describeDrive(
       [call('reticle_navigate', { url: 'http://localhost:4312/orders' }, { verified: 'yes' })],
@@ -360,5 +371,67 @@ describe('the evidence travels with the verdict', () => {
     const summary = describeDrive([guarded], []);
     expect(summary).toContain('NOT RUN: refund-flow');
     expect(summary).not.toContain('regressions');
+  });
+});
+
+describe('a destructive click the gate refused, then the drive confirmed', () => {
+  it('lists the click once, and says it really ran', () => {
+    const refused = call(
+      'reticle_act_and_wait',
+      { ref: 'e119', action: 'click' },
+      { error: 'potentially destructive action blocked; retry with args.confirmDangerous=true' },
+      true,
+    );
+    const ran = call(
+      'reticle_act_and_wait',
+      {
+        ref: 'e119',
+        action: 'click',
+        args: { confirmDangerous: true },
+        until: { kind: 'net', method: 'POST' },
+      },
+      { element: 'button "Refund now"', verified: 'no' },
+    );
+    const summary = describeDrive([refused, ran], []);
+    expect(summary).not.toContain('potentially destructive action blocked');
+    expect(summary).toContain('1 destructive action(s) were confirmed and REALLY RAN');
+    expect(summary).toContain('Drove 1 action(s)');
+  });
+});
+
+describe('a click that opened a confirmation instead of sending', () => {
+  it('says the claim was likely wrong, not the app', () => {
+    const summary = describeDrive(
+      [
+        call(
+          'reticle_act_and_wait',
+          { ref: 'e83', action: 'click', until: { kind: 'net', method: 'POST' } },
+          { element: 'button "Refund"', verified: 'no' },
+        ),
+        call(
+          'reticle_snapshot',
+          {},
+          { status: { route: '/#/t', visibleDialogs: ['(unnamed dialog)'] } },
+        ),
+      ],
+      [],
+    );
+    expect(summary).toContain('it opened a dialog instead');
+  });
+});
+
+describe('the pages a drive reached', () => {
+  it('names the page, not the leased tab it was reached in', () => {
+    const shot = (route: string) => call('reticle_snapshot', {}, { status: { route } });
+    const summary = describeDrive(
+      [
+        shot('/?__reticle_session=lease-1&__reticle_project=p'),
+        shot('/?__reticle_session=lease-1&__reticle_project=p#/settings'),
+        call('reticle_act_and_wait', { ref: 'e1', action: 'click' }, { verified: 'yes' }),
+      ],
+      [],
+    );
+    expect(summary).toContain('Reached 2 page(s): / → /#/settings.');
+    expect(summary).not.toContain('__reticle_');
   });
 });

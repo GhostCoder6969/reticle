@@ -19,6 +19,8 @@ export const BUSY_OFF = '0';
 
 export interface PresenterOptions {
   paceMs?: number;
+  /** Settings' Kill Reticle was confirmed. The SDK disconnects itself from the page. */
+  onKill?: () => void;
   /** Injected monotonic clock for the glow state machine (tests drive transitions). */
   now?: () => number;
   /** Quiet window before busy -> fading. Overridable so tests run fast. */

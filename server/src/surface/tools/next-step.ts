@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { ReticleDir } from '@reticlehq/core';
+import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 
 /**
  * The one thing the agent should do next, on the result of the call it just made.
@@ -21,6 +21,14 @@ const REQUEST_FRESH_MS = 6 * 60 * 60 * 1000;
 const QUIET_CALLS = 10;
 /** An unlinked project hears how to connect on every Nth verdict, the first included. */
 const CONNECT_EVERY = 5;
+/**
+ * How often the agent is asked to record the request before the other lines get their turn. In
+ * every recorded run the agent ignored it, and because it always won, no agent was ever told its
+ * runs were not reaching the platform.
+ */
+const DECLARE_ASKS = 2;
+/** A run file this much newer than the last push, and this old, was not sent. */
+const UNSENT_AFTER_MS = 2 * 60 * 1000;
 
 export const NextText = {
   DECLARE:
@@ -38,6 +46,7 @@ interface RootState {
   calls: number;
   verdicts: number;
   lastQuietAt: number;
+  declareAsks: number;
 }
 
 const roots = new Map<string, RootState>();
@@ -67,9 +76,31 @@ function requestDeclared(root: string, now: number): boolean {
   return now - when < REQUEST_FRESH_MS;
 }
 
-/** Why sync needs a person, from the sync's own bookkeeping; undefined when it is fine. */
-function syncProblem(root: string): string | undefined {
+/** Run files written after the last push and old enough that a sync cycle should have sent them. */
+function unsentRuns(root: string, lastPushAt: number, now: number): number {
+  try {
+    const dir = join(root, ReticleDir.RUNS_SUBDIR);
+    return readdirSync(dir).filter((name) => {
+      const at = statSync(join(dir, name)).mtimeMs;
+      return at > lastPushAt + UNSENT_AFTER_MS && now - at > UNSENT_AFTER_MS;
+    }).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Why sync needs a person, from the sync's own bookkeeping; undefined when it is fine.
+ *
+ * Runs that were written and never sent count too. A project the sync loop never looked at has no
+ * error and no refusal, which is how a whole day of runs stayed on one machine with every check
+ * reporting fine.
+ */
+function syncProblem(root: string, now: number): string | undefined {
   const state = readJson(join(root, ReticleDir.CLOUD_STATE_FILE));
+  const pushed = state?.['lastPushAt'];
+  const unsent = unsentRuns(root, 'number' === typeof pushed ? pushed : 0, now);
+  if (0 < unsent) return `${String(unsent)} run(s) written here were never sent`;
   if (state === undefined) return undefined;
   const error = state['lastError'];
   if ('string' === typeof error && 0 < error.length) return error.slice(0, 120);
@@ -90,14 +121,21 @@ export interface NextStepInput {
 export function nextStep(input: NextStepInput): string | undefined {
   const { root } = input;
   if (root === undefined) return undefined;
-  const state = roots.get(root) ?? { calls: 0, verdicts: 0, lastQuietAt: Number.NEGATIVE_INFINITY };
+  const state = roots.get(root) ?? {
+    calls: 0,
+    verdicts: 0,
+    lastQuietAt: Number.NEGATIVE_INFINITY,
+    declareAsks: 0,
+  };
   roots.set(root, state);
   state.calls += 1;
   if (input.verdict) state.verdicts += 1;
   const linked = existsSync(join(root, ReticleDir.CLOUD_LINK_FILE));
+  // A key in the environment syncs too, so its runs not arriving is just as much a problem.
+  const sends = linked || 0 < (process.env[ReticleEnv.API_KEY] ?? '').length;
   const quietDue = state.calls - state.lastQuietAt >= QUIET_CALLS;
 
-  const problem = linked ? syncProblem(root) : undefined;
+  const problem = sends ? syncProblem(root, input.now) : undefined;
   if (problem !== undefined && (input.verdict || quietDue)) {
     state.lastQuietAt = state.calls;
     return NextText.SYNC_PROBLEM(problem);
@@ -105,13 +143,15 @@ export function nextStep(input: NextStepInput): string | undefined {
   // Not on the declare call itself, which is the answer to this line.
   if (
     !input.tool.endsWith('intent') &&
+    state.declareAsks < DECLARE_ASKS &&
     !requestDeclared(root, input.now) &&
     (input.verdict || quietDue)
   ) {
     state.lastQuietAt = state.calls;
+    state.declareAsks += 1;
     return NextText.DECLARE;
   }
   if (!input.verdict) return undefined;
-  if (!linked && 1 === state.verdicts % CONNECT_EVERY) return NextText.CONNECT;
-  return linked ? NextText.FINISH_LINKED : NextText.FINISH;
+  if (!sends && 1 === state.verdicts % CONNECT_EVERY) return NextText.CONNECT;
+  return sends ? NextText.FINISH_LINKED : NextText.FINISH;
 }

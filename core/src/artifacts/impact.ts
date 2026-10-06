@@ -218,6 +218,8 @@ export const HarnessConfigSchema = z.object({
   harnessEntitled: z.boolean(),
   /** Whether the selected provider has a usable platform key. Older daemons may omit it. */
   providerReady: z.boolean().optional(),
+  /** Harness credits used and held this 30 days; one is one Harness decision. Absent: unbounded or unknown. */
+  credits: z.object({ used: z.number().int().min(0), limit: z.number().int().min(0) }).optional(),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfigSchema>;
 

@@ -8,7 +8,7 @@ import type { Slide } from './carousel.js';
 import { HudNoticeSchema, type HudNotice } from '@reticlehq/core/hud';
 import { esc } from '../chrome/presenter-safe-html.js';
 
-/** Harness comes with a plan or trial; the console has no /harness page (it redirected home). */
+/** Credits and plans live on the Plan screen; the console has no /harness page (it redirected home). */
 const HARNESS_URL = 'https://app.reticle.sh/settings?group=billing';
 export const SLIDE_ID = {
   HARNESS: 'harness-journeys',

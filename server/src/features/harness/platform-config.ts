@@ -54,6 +54,8 @@ export interface PlatformModelConfig {
    * not have its silence treated as a refusal.
    */
   providerReady: boolean;
+  /** Harness credits used and held this 30 days. Absent when the plan is unbounded or the API is older. */
+  credits?: { used: number; limit: number };
 }
 
 /** A GET, narrowed to what this file uses, so a test can answer it without a network. */
@@ -83,11 +85,23 @@ function parse(body: string): PlatformModelConfig | undefined {
       'object' === typeof available && null !== available
         ? (available as Record<string, unknown>)[provider]
         : undefined;
+    const credits = record['credits'];
+    const used =
+      'object' === typeof credits && null !== credits
+        ? (credits as Record<string, unknown>)['used']
+        : undefined;
+    const limit =
+      'object' === typeof credits && null !== credits
+        ? (credits as Record<string, unknown>)['limit']
+        : undefined;
     return {
       provider,
       harnessEnabled: 'boolean' === typeof enabled ? enabled : true,
       harnessEntitled: 'boolean' === typeof entitled ? entitled : true,
       providerReady: 'boolean' === typeof ready ? ready : true,
+      ...('number' === typeof used && 'number' === typeof limit
+        ? { credits: { used, limit } }
+        : {}),
     };
   } catch {
     return undefined;

@@ -11,7 +11,9 @@ interface Call {
 }
 
 /** Ports over a fake app: `failing` flows replay red, `absent` predicates do not hold. */
-function fakePorts(options: { failing?: string[]; absent?: string[]; parallel?: number } = {}) {
+function fakePorts(
+  options: { failing?: string[]; absent?: string[]; parallel?: number; checks?: string } = {},
+) {
   const calls: Call[] = [];
   let live = 0;
   let peak = 0;
@@ -60,7 +62,15 @@ function fakePorts(options: { failing?: string[]; absent?: string[]; parallel?: 
         stopReason: StopReason.FINISHED,
         summary: '',
         steps: 1,
-        toolCalls: [],
+        toolCalls: [
+          {
+            id: 'c',
+            name: ReticleTool.ACT_AND_WAIT,
+            args: { ref: 'e1', action: 'click', until: { kind: 'signal', name: 'done' } },
+            result: { verified: options.checks ?? Verified.YES },
+            isError: false,
+          },
+        ],
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         proved: true,
       });
@@ -196,5 +206,22 @@ describe('a lane that breaks', () => {
     );
     expect(run.lines.join('\n')).toContain('blocked (no browser could start)');
     expect(run.view.lanes[0]?.journeys.every((j) => ScriptStatus.PASSED === j.status)).toBe(true);
+  });
+});
+
+/** From the recorded runs: a persona journey whose two checks both failed was marked passed. */
+describe('an open journey', () => {
+  it('fails when its checks failed, though a check ran', async () => {
+    const fake = fakePorts({ checks: Verified.NO });
+    const run = await runScript(
+      script({
+        version: 1,
+        source: 'platform',
+        journeys: [{ id: 'refund', title: 'Refund', steps: [{ kind: 'act', goal: 'refund it' }] }],
+        lanes: [{ id: 'A', journeys: ['refund'] }],
+      }),
+      fake.ports,
+    );
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
   });
 });

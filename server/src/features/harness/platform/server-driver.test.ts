@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DriveStoppedError,
-  runHarness,
-  type HarnessToolset,
-  type ModelDriver,
-} from '../harness.js';
+import { DriveStoppedError, runHarness, type HarnessToolset } from '../harness.js';
 import { serverDriver } from './server-driver.js';
 
 const toolset = (seen: string[]): HarnessToolset => ({
@@ -75,38 +70,53 @@ describe('the platform drives, this machine executes', () => {
     });
   });
 
-  it('drives locally when the platform does not run the Harness yet', async () => {
-    const { fetch } = platform({});
-    const local: ModelDriver = {
-      turn: () =>
-        Promise.resolve({
-          text: '',
-          calls: [{ id: 'f', name: 'finish', args: { summary: 'local' } }],
-        }),
-    };
-    const why: string[] = [];
-    const result = await runHarness(
+  /** The Harness decides on the platform; a password it types must never travel there. */
+  it('sends a secret field by name only, and fills in its value on this machine', async () => {
+    const { asked, fetch } = platform({
+      '/v1/harness/runs': () => ({ runId: 'hr_1' }),
+      '/v1/harness/runs/hr_1/turn': (body) =>
+        0 === body['turn']
+          ? {
+              turn: 0,
+              calls: [
+                {
+                  id: 't1',
+                  name: 'reticle_act_and_wait',
+                  args: {
+                    ref: 'e6',
+                    action: 'fill',
+                    args: { value: 'reticle-secret:auth-password' },
+                  },
+                },
+              ],
+              text: 'signing in',
+              done: false,
+              status: 'running',
+            }
+          : { turn: 1, calls: [], text: 'ok', done: true, status: 'finished', summary: 'in' },
+    });
+    const executed: string[] = [];
+    await runHarness(
       serverDriver({
         url: 'https://p.test',
         apiKey: 'k',
         fetch,
-        fallback: local,
-        onFallback: (w) => why.push(w),
+        env: { RETICLE_SECRET_AUTH_PASSWORD: 'hunter2' },
       }),
-      toolset([]),
+      toolset(executed),
     );
-    expect(why).toHaveLength(1);
-    expect(result.summary).toBe('local');
+    expect(executed[0]).toContain('hunter2');
+    expect(asked[0]?.body['secrets']).toEqual(['AUTH_PASSWORD']);
+    expect(JSON.stringify(asked)).not.toContain('hunter2');
   });
 
-  it('says why the platform refused, and does not fall back from a refusal', async () => {
+  it('says why the platform refused', async () => {
     const { fetch } = platform({ '/v1/harness/runs': () => ({ status: 402 }) });
     const result = await runHarness(
       serverDriver({
         url: 'https://p.test',
         apiKey: 'k',
         fetch,
-        fallback: { turn: () => Promise.reject(new Error('no')) },
       }),
       toolset([]),
     );

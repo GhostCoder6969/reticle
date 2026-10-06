@@ -3,19 +3,14 @@ import { coveragePercents } from './features/exhaust/ledger.js';
 import { firstRunWiring } from './portal/session/first-run-wiring.js';
 import { fetchPlatformConfig } from '@/features/harness/platform-config.js';
 import { join } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { linkedCloudPort, platformEnvPort } from './memory/cloud/cloud-config.js';
 import { attachCloudSync } from './memory/cloud/sync-daemon.js';
 import { wireHooks } from './hooks/hook-commands.js';
-import {
-  PROJECT_REGISTRY_FILE,
-  parseProjectRegistry,
-  projectCandidates,
-} from '@reticlehq/core/artifacts';
-import { discoverProjectConfigs } from './command/cli/config/config-discovery.js';
+import { currentDrivenBy } from './hooks/driven-by.js';
 import {
   artifactRootResolver,
+  knownProjectCandidates,
   projectDirectoryFor,
 } from './memory/project/artifact-root-resolver.js';
 import { servingDirectoryOf } from './portal/session/serving-directory.js';
@@ -351,24 +346,7 @@ function sdkFixForProject(projectId?: string): string {
  * not. Deciding that here would mean reading every cloud.json on every tick.
  */
 function knownProjectRoots(): string[] {
-  const roots = new Set<string>();
-  try {
-    const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);
-    if (existsSync(path)) {
-      const registry = parseProjectRegistry(JSON.parse(readFileSync(path, 'utf8')));
-      for (const candidate of projectCandidates(registry))
-        roots.add(join(candidate.directory, ReticleDir.ROOT));
-    }
-  } catch {
-    // A registry that cannot be read is an empty one — never a reason to stop syncing.
-  }
-  try {
-    for (const config of discoverProjectConfigs(process.cwd()).found)
-      roots.add(join(config.directory, ReticleDir.ROOT));
-  } catch {
-    // Same: a diagnostic walk that throws must not take the sync loop with it.
-  }
-  return [...roots];
+  return [...new Set(knownProjectCandidates().map((c) => join(c.directory, ReticleDir.ROOT)))];
 }
 
 /** This project's platform credential (stored, else the env key), as the env the platform readers take. */
@@ -413,7 +391,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
     bridge.sessions.setDefaultScope({ projectId: activeProjectId });
   }
   const baselines = new BaselineStore();
-  const recordings = new RecordingStore();
+  const recordings = new RecordingStore(() => currentDrivenBy() !== undefined);
   // drive precedence: driveUrl (launch+own a browser) → CDP (attach) → none.
   let pool: BrowserPool | undefined;
   let leaseReaper: LeaseReaper | undefined;
@@ -617,7 +595,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   const flows = new FlowStore(fs, reticleRoot, { now });
   // Built here rather than inside `deps` below, so teardown can save what a drive recorded. Both
   // paths pass the same pair — `daemon-parity.test.ts` is what keeps them from drifting apart.
-  const recordings = new RecordingStore();
+  const recordings = new RecordingStore(() => currentDrivenBy() !== undefined);
   /*
    * Bound AFTER the sync daemon exists, read only when a run is actually written.
    *

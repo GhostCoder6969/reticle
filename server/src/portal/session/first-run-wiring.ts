@@ -14,14 +14,14 @@
  * the first run already changed.
  */
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { isWebApp } from '@reticlehq/init';
 import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
 
 /** init has a dev server to start and a page to wait for; past this it is not coming. */
 const WIRE_TIMEOUT_MS = 120_000;
-const PACKAGE_JSON = 'package.json';
 /** A plan line as init prints it: `[✓] Vite plugin → vite.config.ts`. */
 const PLAN_LINE = /^\s*\[(.)\]\s+(.+?)\s+→\s+(.+)$/;
 
@@ -69,7 +69,19 @@ export function projectDirectoryOf(
   if (dir === resolve(home) || dir === resolve('/')) return undefined;
   // Already wired: nothing for a first run to do, and init over a wired app proves nothing.
   if (wired(dir)) return undefined;
-  return existsSync(join(dir, PACKAGE_JSON)) ? dir : undefined;
+  // Only an app with a page: a daemon started in a library or API package wrote a config there.
+  return isWebApp('.', {
+    exists: (p) => existsSync(join(dir, p)),
+    readFile: (p) => {
+      try {
+        return readFileSync(join(dir, p), 'utf8');
+      } catch {
+        return null;
+      }
+    },
+  })
+    ? dir
+    : undefined;
 }
 
 /** init's plan lines, and the one JSON object it prints last under `--json`. */

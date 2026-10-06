@@ -22,7 +22,7 @@ import {
   withLinkedCredential,
   MSG_NO_HARNESS_KEY,
 } from './harness-explore.js';
-import { DRIVER_NAMES, EXPLORE_NEEDS } from '@/features/harness/drivers.js';
+import { EXPLORE_NEEDS } from '@/features/harness/drivers.js';
 import { describeDrive, replayedFlows } from '@/features/harness/drive-report.js';
 import { StopReason, type HarnessResult } from '@/features/harness/harness.js';
 
@@ -42,12 +42,6 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       maxSteps: stepCountSchema
         .optional()
         .describe('Ceiling on model turns; the drive is graded however it ends.'),
-      driver: z
-        .enum(DRIVER_NAMES)
-        .optional()
-        .describe(
-          'Which model drives. server is the platform; an unconfigured one is an error, not a substitute.',
-        ),
       sessionId: z
         .string()
         .optional()
@@ -103,7 +97,6 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       const persona = args['persona'];
       const maxSteps = args['maxSteps'];
       const sessionId = args['sessionId'];
-      const driver = args['driver'];
       const {
         drive,
         savedFlows,
@@ -117,7 +110,6 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         ...('string' === typeof persona ? { focus: persona } : {}),
         ...('number' === typeof maxSteps ? { maxSteps } : {}),
         ...('string' === typeof sessionId ? { sessionId } : {}),
-        ...('string' === typeof driver ? { driverName: driver } : {}),
       });
       return {
         stopReason: drive.stopReason,

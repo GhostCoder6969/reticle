@@ -60,12 +60,19 @@ describe('wiring the app on first use', () => {
   it('does not guess a project for a daemon in the home directory or outside any package', () => {
     const home = mkdtempSync(join(tmpdir(), 'home-'));
     const app = mkdtempSync(join(tmpdir(), 'app-'));
-    writeFileSync(join(app, 'package.json'), '{}');
+    writeFileSync(
+      join(app, 'package.json'),
+      JSON.stringify({ scripts: { dev: 'vite' }, devDependencies: { vite: '6' } }),
+    );
     expect(projectDirectoryOf(home, home, () => false)).toBeUndefined();
     expect(
       projectDirectoryOf(mkdtempSync(join(tmpdir(), 'bare-')), home, () => false),
     ).toBeUndefined();
     expect(projectDirectoryOf(app, home, () => false)).toBe(app);
+    // A package that is not an app (a library, an API) is never wired unasked.
+    const lib = mkdtempSync(join(tmpdir(), 'lib-'));
+    writeFileSync(join(lib, 'package.json'), JSON.stringify({ scripts: { dev: 'tsx watch' } }));
+    expect(projectDirectoryOf(lib, home, () => false)).toBeUndefined();
     // A project that is already wired has nothing for a first run to do.
     expect(projectDirectoryOf(app, home, () => true)).toBeUndefined();
   });

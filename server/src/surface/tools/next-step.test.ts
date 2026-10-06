@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -58,5 +58,48 @@ describe('what the agent is told to do next', () => {
     expect(
       nextStep({ tool: 'reticle_intent', verdict: false, root: root(), now: NOW }),
     ).toBeUndefined();
+  });
+});
+
+/**
+ * From nine recorded runs on the merchant dashboard: no agent ever recorded the request, every
+ * `next` line it saw was that same ask, and so none was told its runs were not reaching the platform.
+ */
+describe('the request ask does not hide everything else', () => {
+  it('is asked twice, then gives the other lines their turn', () => {
+    const r = root();
+    expect(verdict(r)).toBe(NextText.DECLARE);
+    expect(verdict(r)).toBe(NextText.DECLARE);
+    expect(verdict(r)).not.toBe(NextText.DECLARE);
+  });
+});
+
+describe('runs written and never sent', () => {
+  it('are a sync problem even with no error and nothing refused', () => {
+    const r = root({
+      'cloud.json': { projectId: 'p' },
+      'request.json': { at: NOW },
+      'cloud-state.json': { lastPushAt: NOW - 60 * 60 * 1000 },
+    });
+    mkdirSync(join(r, 'runs'));
+    const run = join(r, 'runs', 'drive-1.json');
+    writeFileSync(run, '{}');
+    const tenMinutesAgo = (NOW - 10 * 60 * 1000) / 1000;
+    utimesSync(run, tenMinutesAgo, tenMinutesAgo);
+    expect(verdict(r)).toBe(NextText.SYNC_PROBLEM('1 run(s) written here were never sent'));
+  });
+});
+
+describe('a project that sends through the key in the environment', () => {
+  it('is told its run syncs on its own, not how to connect', () => {
+    const previous = process.env['RETICLE_API_KEY'];
+    process.env['RETICLE_API_KEY'] = 'k';
+    try {
+      const r = root({ 'request.json': { at: NOW } });
+      expect(verdict(r)).toBe(NextText.FINISH_LINKED);
+    } finally {
+      if (previous === undefined) delete process.env['RETICLE_API_KEY'];
+      else process.env['RETICLE_API_KEY'] = previous;
+    }
   });
 });

@@ -764,6 +764,11 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   return hint;
 }
 
+/** Every element a query matches, in the order a `query` reports them. */
+export function elementsMatching(query: ElementQuery): HTMLElement[] {
+  return findCandidates(query).candidates;
+}
+
 /**
  * Resolve a query to descriptors for the `query` MCP tool.
  *

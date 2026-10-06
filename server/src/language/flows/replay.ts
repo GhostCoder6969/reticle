@@ -8,6 +8,7 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { formatStepAddress } from 'open-verification';
+import { refFor } from './flow-anchor.js';
 import type { RecordedStep, CompiledProgram } from './recording/tape/recordings.js';
 import type { Session } from '@/portal/session/session.js';
 import { asRecord, asString } from '@reticlehq/core';
@@ -19,6 +20,10 @@ import { asRecord, asString } from '@reticlehq/core';
  */
 export function ambiguousTestidNote(value: string): string {
   return `ambiguous testid '${value}', used first match`;
+}
+
+function ambiguousRoleNote(role: string, name: string): string {
+  return `ambiguous ${role} named '${name}', used first match`;
 }
 
 /**
@@ -251,6 +256,10 @@ function compileAnchorArgs(
       args: actArgs,
     };
     if (source !== undefined) roleArgs['source'] = source;
+    if ('number' === typeof r['nth'] && 'number' === typeof r['of']) {
+      roleArgs['nth'] = r['nth'];
+      roleArgs['of'] = r['of'];
+    }
     return { args: roleArgs, stable: true };
   }
   const component = asString(r['component']);
@@ -311,6 +320,8 @@ async function resolveRef(
     name?: unknown;
     component?: unknown;
     source?: unknown;
+    nth?: unknown;
+    of?: unknown;
   },
 ): Promise<{ ref: string; note?: string }> {
   const by = asString(step.by);
@@ -330,11 +341,13 @@ async function resolveRef(
     const query: Record<string, unknown> = { by, value, ...(name === undefined ? {} : { name }) };
     const result = await session.command(ReticleCommand.QUERY, query);
     if (!result.ok) throw new Error(result.error ?? 'query failed');
-    const ref = queryRefs(result)[0];
+    const refs = queryRefs(result);
+    const meant = refFor(step, refs);
+    const ref = meant ?? refs[0];
     if (ref === undefined) {
       throw new Error(`${value} named '${String(name)}' did not resolve in current page`);
     }
-    return { ref };
+    return meant === undefined ? { ref, note: ambiguousRoleNote(value, String(name)) } : { ref };
   }
   if (by === QueryBy.COMPONENT) {
     const component = asString(step.component);

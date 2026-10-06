@@ -30,6 +30,7 @@ export interface HarnessConfigView {
   harnessEntitled: boolean;
   /** Whether the platform holds a key for `provider`. Entitlement is not readiness — see the offer. */
   providerReady: boolean;
+  credits?: { used: number; limit: number };
 }
 
 export interface ConfigSource {

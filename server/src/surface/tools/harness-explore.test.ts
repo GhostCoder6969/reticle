@@ -13,17 +13,13 @@ import {
   harnessAvailable,
   maxStepsFromEnv,
   reconcileFlows,
-  knownDriver,
   openRecordingName,
   bankedIntent,
   withLinkedCredential,
   MSG_NO_HARNESS_KEY,
-  MSG_NO_JEV_KEY,
-  MSG_NO_OPENAI_KEY,
   MSG_HARNESS_DISABLED,
   MSG_HARNESS_UNCLAIMED,
   MSG_HARNESS_UNCONFIRMED,
-  MSG_HARNESS_NO_PROVIDER,
 } from './harness-explore.js';
 
 /** One completed flow-save call, as the loop records it. */
@@ -151,9 +147,20 @@ describe('exploring an app', () => {
     await expect(exploreApp(depsWithFlows([]), {})).rejects.toThrow(MSG_NO_HARNESS_KEY);
   });
 
-  it('is available exactly when a key is set', () => {
+  /** The Harness is the platform's: a model key of one's own no longer drives anything here. */
+  it('is available only through the platform, never on a model key of your own', () => {
     expect(harnessAvailable({})).toBe(false);
-    expect(harnessAvailable({ [ReticleEnv.HARNESS_KEY]: 'sk-x' })).toBe(true);
+    expect(harnessAvailable({ [ReticleEnv.HARNESS_KEY]: 'sk-x' })).toBe(false);
+    expect(
+      harnessAvailable({ [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://p' }),
+    ).toBe(true);
+  });
+
+  it('refuses a drive on a model key of your own, and says the Harness is on the platform', async () => {
+    await expect(
+      exploreApp(depsWithFlows([]), { [ReticleEnv.HARNESS_KEY]: 'sk-ant-own' }, { maxSteps: 1 }),
+    ).rejects.toThrow(MSG_NO_HARNESS_KEY);
+    expect(MSG_NO_HARNESS_KEY).toContain('reticle connect');
   });
 });
 
@@ -238,120 +245,6 @@ describe('reconciling what a drive left behind', () => {
       ],
     );
     expect(result.rewroteFlows).toEqual(['sign-in']);
-  });
-});
-
-/**
- * Naming a driver is how a comparison attributes its result, so the two failure modes that would
- * make that attribution a lie are the ones pinned here: silently substituting another driver, and
- * reporting a name that is not the one that drove.
- */
-describe('choosing which model drives', () => {
-  const JEV_ENV = { JEV_API_KEY: 'j' };
-  const BOTH = { JEV_API_KEY: 'j', ANTHROPIC_API_KEY: 'a' };
-
-  it('defaults to anthropic when both are configured', async () => {
-    const result = await exploreApp(depsWithFlows([]), BOTH, {
-      maxSteps: 1,
-      skipPlatformConfig: true,
-    });
-    expect(result.driverName).toBe('anthropic');
-  });
-
-  it('uses jev when it is the only one configured', async () => {
-    const result = await exploreApp(depsWithFlows([]), JEV_ENV, {
-      maxSteps: 1,
-      skipPlatformConfig: true,
-    });
-    expect(result.driverName).toBe('jev');
-  });
-
-  it('honours a per-call request over the daemon default', async () => {
-    const result = await exploreApp(depsWithFlows([]), BOTH, { maxSteps: 1, driverName: 'jev' });
-    expect(result.driverName).toBe('jev');
-  });
-
-  it('honours the environment when no call names one', async () => {
-    const result = await exploreApp(
-      depsWithFlows([]),
-      { ...BOTH, RETICLE_HARNESS_DRIVER: 'jev' },
-      { maxSteps: 1, skipPlatformConfig: true },
-    );
-    expect(result.driverName).toBe('jev');
-  });
-
-  /** A substitution here would let an A/B measure the same driver twice and call it a comparison. */
-  it('refuses a named driver it cannot build rather than substituting the other', async () => {
-    await expect(
-      exploreApp(depsWithFlows([]), { ANTHROPIC_API_KEY: 'a' }, { maxSteps: 1, driverName: 'jev' }),
-    ).rejects.toThrow(MSG_NO_JEV_KEY);
-  });
-
-  it('refuses a driver it has never heard of', async () => {
-    await expect(
-      exploreApp(depsWithFlows([]), BOTH, { maxSteps: 1, driverName: 'gpt' }),
-    ).rejects.toThrow('Unknown harness driver');
-  });
-
-  it('calls an injected driver custom, because it is not ours to name', async () => {
-    const result = await exploreApp(
-      depsWithFlows([]),
-      {},
-      { driver: finishing(''), skipPlatformConfig: true },
-    );
-    expect(result.driverName).toBe('custom');
-  });
-});
-
-/**
- * A preference the daemon cannot honour is ignored; an instruction it cannot honour is refused.
- *
- * The platform offers providers a given daemon may be too old to know — it already offers `openai`,
- * which has no binding here. A stored preference is a statement about the account, so a daemon that
- * refused to drive because a web UI knew one more word than it does would be broken by its own
- * upgrade cycle. Naming a driver in the CALL is an instruction, and an unknown one still throws.
- */
-describe('a stored preference this build cannot honour', () => {
-  it('keeps a driver it has', () => {
-    expect(knownDriver('jev')).toBe('jev');
-    expect(knownDriver('anthropic')).toBe('anthropic');
-    expect(knownDriver('openai')).toBe('openai');
-  });
-
-  /**
-   * `openai` was the example here until this build grew a driver for it, which is the case this
-   * asymmetry exists for: the platform offers providers a given daemon may not have yet, and the
-   * daemon catches up later. The test moved to a name this build does not know rather than being
-   * deleted, because the situation it describes did not go away — it just moved along one.
-   */
-  it('ignores one it does not have, rather than refusing to drive', () => {
-    expect(knownDriver('a-provider-added-after-this-build')).toBeUndefined();
-  });
-
-  it('ignores an absent preference', () => {
-    expect(knownDriver(undefined)).toBeUndefined();
-  });
-
-  /** The same word, asked for explicitly, is still an error — that is the asymmetry. */
-  it('still refuses the same name when the CALL asks for it', async () => {
-    await expect(
-      exploreApp(
-        depsWithFlows([]),
-        { JEV_API_KEY: 'j' },
-        { maxSteps: 1, skipPlatformConfig: true, driverName: 'a-provider-added-after-this-build' },
-      ),
-    ).rejects.toThrow('Unknown harness driver');
-  });
-
-  /** A driver this build HAS but has no key for is refused BY NAME, never quietly swapped. */
-  it('refuses a known driver it cannot configure, rather than substituting', async () => {
-    await expect(
-      exploreApp(
-        depsWithFlows([]),
-        { JEV_API_KEY: 'j' },
-        { maxSteps: 1, skipPlatformConfig: true, driverName: 'openai' },
-      ),
-    ).rejects.toThrow(MSG_NO_OPENAI_KEY);
   });
 });
 
@@ -501,16 +394,6 @@ describe('turning the harness off', () => {
     ).rejects.toThrow(MSG_HARNESS_DISABLED);
   });
 
-  /** Absent means ON: a machine that cannot reach the platform must not lose a feature silently. */
-  it('drives when the platform cannot be reached at all', async () => {
-    const result = await exploreApp(
-      depsWithFlows([]),
-      { JEV_API_KEY: 'j' },
-      { maxSteps: 1, skipPlatformConfig: true, driver: finishing('') },
-    );
-    expect(result.drive).toBeDefined();
-  });
-
   it('drives when the platform says the harness is on', async () => {
     const result = await exploreApp(depsWithFlows([]), linked, {
       maxSteps: 1,
@@ -527,7 +410,7 @@ describe('turning the harness off', () => {
  * A drive through the platform proxy spends Reticle's model budget. Free for three months, included
  * on a paid plan, and otherwise nobody is paying for it. Told as "the harness is off" that becomes a
  * support ticket from somebody who never turned anything off, so it is refused in its own words —
- * and never refused at all to somebody driving on a key of their own.
+ * and the Harness runs on nothing else: it is the platform's, on the workspace's credits.
  */
 describe('a workspace with no entitlement', () => {
   const platformSays = (body: Record<string, unknown>) => () =>
@@ -539,7 +422,7 @@ describe('a workspace with no entitlement', () => {
   });
   const linked = { [ReticleEnv.API_KEY]: 'rk_live_x', [ReticleEnv.CLOUD_URL]: 'https://api.test' };
 
-  it('is told to start a plan or bring a key, never to claim an offer that does not exist', async () => {
+  it('is pointed at its Harness credits, never at an offer that does not exist', async () => {
     await expect(
       exploreApp(depsWithFlows([]), linked, {
         maxSteps: 1,
@@ -550,23 +433,13 @@ describe('a workspace with no entitlement', () => {
     // The free offer is switched off on the platform and the console has no claim button, so the
     // old "claim the free 3 months" sent people looking for something that is not there.
     expect(MSG_HARNESS_UNCLAIMED).not.toMatch(/free 3 months|claim/i);
-    expect(MSG_HARNESS_UNCLAIMED).toContain('Settings → Billing');
-  });
-
-  /** Their key, their spend. Entitlement has no business stopping a drive that costs us nothing. */
-  it('drives anyway for somebody who brought their own model key', async () => {
-    const result = await exploreApp(
-      depsWithFlows([]),
-      { ...linked, [ReticleEnv.HARNESS_KEY]: 'sk-ant-own' },
-      { maxSteps: 1, driver: finishing(''), configFetch: unentitled },
-    );
-    expect(result.drive).toBeDefined();
+    expect(MSG_HARNESS_UNCLAIMED).toContain('Settings → Plan');
   });
 
   /**
    * The gate used to FAIL OPEN: a platform that was slow for two seconds, or down, let the drive
    * run on Reticle's model budget with nobody's entitlement checked. A drive that would bill us
-   * needs a confirmed yes; a drive on somebody's own key never asks.
+   * needs a confirmed yes.
    */
   const unreachable = () => Promise.reject(new Error('ETIMEDOUT'));
   it('refuses a drive on our budget when the platform cannot confirm it', async () => {
@@ -577,30 +450,6 @@ describe('a workspace with no entitlement', () => {
         configFetch: unreachable,
       }),
     ).rejects.toThrow(MSG_HARNESS_UNCONFIRMED);
-  });
-
-  it('still drives on a key of their own when the platform cannot be reached', async () => {
-    const result = await exploreApp(
-      depsWithFlows([]),
-      { ...linked, [ReticleEnv.HARNESS_KEY]: 'sk-ant-own' },
-      { maxSteps: 1, driver: finishing(''), configFetch: unreachable },
-    );
-    expect(result.drive).toBeDefined();
-  });
-
-  it('refuses a drive on our budget when the platform says its model is not ready', async () => {
-    await expect(
-      exploreApp(depsWithFlows([]), linked, {
-        maxSteps: 1,
-        driver: finishing(''),
-        configFetch: platformSays({
-          provider: 'jev',
-          harnessEnabled: true,
-          harnessEntitled: true,
-          available: { jev: false },
-        }),
-      }),
-    ).rejects.toThrow(MSG_HARNESS_NO_PROVIDER);
   });
 
   /** An older platform reports neither field; silence must not read as a refusal. */
@@ -615,12 +464,12 @@ describe('a workspace with no entitlement', () => {
 });
 
 describe('what the explore tool says it needs', () => {
-  it('names every way in, not only the Anthropic key it once required', async () => {
+  it('says it runs on the platform, linked', async () => {
     const { EXPLORE_TOOLS } = await import('./explore-tools.js');
     const { EXPLORE_NEEDS } = await import('@/features/harness/drivers.js');
     const description = EXPLORE_TOOLS.map((t) => t.description).join(' ');
     expect(description).toContain(EXPLORE_NEEDS);
-    expect(EXPLORE_NEEDS).toContain('Harness plan');
-    expect(EXPLORE_NEEDS).toContain('JEV_API_KEY');
+    expect(EXPLORE_NEEDS).toContain('reticle connect');
+    expect(EXPLORE_NEEDS).not.toContain('API_KEY');
   });
 });

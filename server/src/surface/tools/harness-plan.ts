@@ -23,6 +23,7 @@
  */
 
 import type { DomainModel } from '@/judgement/domain/domain-model.js';
+import { ReticleTool } from '@reticlehq/core';
 
 export const PlanStepKind = {
   /** Already recorded: replay it deterministically instead of paying a model to rediscover it. */
@@ -212,4 +213,27 @@ export function planAsText(plan: HarnessPlan): string {
  */
 export function withoutReplays(plan: HarnessPlan): HarnessPlan {
   return { ...plan, steps: plan.steps.filter((step) => PlanStepKind.DRIVE === step.kind) };
+}
+
+/** How much of the live page the planner reads. Enough for a dashboard's nav and main controls. */
+const MAX_ABOUT_SNAPSHOT = 6_000;
+
+/**
+ * What the planner is told about the product: the plan from `.reticle`, then the app's own controls
+ * as they are on screen now. With only the plan, an empty project read "PLAN: none" and the planner
+ * proposed generic people (an admin, a sign-in journey) for an app that has neither.
+ */
+export async function aboutTheApp(
+  planText: string,
+  invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+): Promise<string> {
+  try {
+    const snap = await invoke(ReticleTool.SNAPSHOT, { mode: 'interactive' });
+    const tree =
+      'object' === typeof snap && null !== snap ? (snap as { tree?: unknown }).tree : undefined;
+    if ('string' !== typeof tree || 0 === tree.length) return planText;
+    return `${planText}\n\nTHE APP AS IT IS ON SCREEN NOW (its own controls, in its own words):\n${tree.slice(0, MAX_ABOUT_SNAPSHOT)}`;
+  } catch {
+    return planText;
+  }
 }

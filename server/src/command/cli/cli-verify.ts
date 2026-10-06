@@ -18,7 +18,9 @@ import {
   exploreApp,
   harnessAvailable,
   MSG_NO_HARNESS_KEY,
+  withLinkedCredential,
 } from '@/surface/tools/harness-explore.js';
+import { linkedCloudPort } from '@/memory/cloud/cloud-config.js';
 import { resolveSuiteSelection } from '@/language/flows/suite-selection.js';
 import { projectOnly } from '@/memory/project/session-root.js';
 import {
@@ -352,6 +354,9 @@ export function buildVerifyDeps(
     fs,
     reticleRoot,
     now,
+    // The key `reticle connect` filed. Without it a connected machine that never exported
+    // RETICLE_API_KEY was told to run `reticle connect` when asking the Harness to drive.
+    linkedCloud: linkedCloudPort(fs, reticleRoot, homedir(), process.env),
   };
   if (running.realInput !== undefined) deps.realInput = running.realInput;
   return deps;
@@ -416,6 +421,7 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     ...(opts.storageState !== undefined ? { storageState: opts.storageState } : {}),
   });
   const deps = buildVerifyDeps(running, opts.reticleRoot, opts.now);
+  const harnessEnv = await withLinkedCredential(deps, process.env);
   const runner = new ReticleRunner(createRunnerPort(deps, opts.sessionId));
   return {
     sessionReady: (timeoutMs) => waitForSession(deps.sessions, timeoutMs, opts.now),
@@ -425,10 +431,10 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
         : (await resolveSuiteSelection(deps, projectOnly(undefined), { labels: [...select] })).run,
     // Absent, not throwing, when no model is configured: the CLI reads its absence as "unavailable"
     // and prints the one sentence that makes it available.
-    ...(harnessAvailable(process.env)
+    ...(harnessAvailable(harnessEnv)
       ? {
           explore: async (focus?: string) => {
-            const result = await exploreApp(deps, process.env, {
+            const result = await exploreApp(deps, harnessEnv, {
               ...(focus === undefined ? {} : { focus }),
               ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
             });
@@ -537,14 +543,14 @@ export function expectNeedsDaemonMessage(port: number, presence: PortPresence): 
 }
 
 /**
- * The model key is set here but not in the daemon, which is where the drive runs. The daemon is
+ * The platform key is set here but not in the daemon, which is what asks the platform. The daemon is
  * usually the one `init` or the agent's MCP client started, from an environment without the key.
  */
 export function daemonLacksKeyMessage(port: number): string {
   return (
-    `${ReticleEnv.HARNESS_KEY} is set in this shell, but the daemon on port ${String(port)} was ` +
-    'started without it, and the drive runs inside the daemon. Restart it from this shell so it ' +
-    `inherits the key: npx @reticlehq/server restart --port ${String(port)}`
+    `${ReticleEnv.API_KEY} is set in this shell, but the daemon on port ${String(port)} was ` +
+    'started without it, and the daemon is what asks the platform to drive. Restart it from this ' +
+    `shell so it inherits the key: npx @reticlehq/server restart --port ${String(port)}`
   );
 }
 
@@ -753,8 +759,8 @@ export function handleVerify(parsed: {
         });
         for (const line of explored.lines) ports.out(line);
         // The drive runs INSIDE the daemon, so the key has to be in ITS environment. A reader who
-        // exported it in this shell and got "set ANTHROPIC_API_KEY" back has been told to do the
-        // thing they just did; say where the key is actually missing.
+        // exported it in this shell and was told to link has been told to do the thing they just
+        // did; say where the key is actually missing.
         if (0 !== explored.code && harnessAvailable(process.env)) {
           const refusedForKey = explored.lines.some((line) => line.includes(MSG_NO_HARNESS_KEY));
           if (refusedForKey) ports.fail(daemonLacksKeyMessage(port));

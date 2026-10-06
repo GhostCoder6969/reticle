@@ -132,6 +132,9 @@ export class RecordingStore {
   /** A navigation came after the last captured step — see markNavigated. */
   #navigatedSinceStep = false;
 
+  /** `byHarness`: whether the step being captured was driven by the Harness, which tapes its own. */
+  constructor(private readonly byHarness: () => boolean = () => false) {}
+
   start(name: string, cursor: number, startPath?: string, session?: string): void {
     const openedOver = new Map<string, number>();
     for (const [outer, rec] of this.#targets(session)) openedOver.set(outer, rec.steps.length);
@@ -194,6 +197,9 @@ export class RecordingStore {
       // it is a different one that starts in a state nothing established. A recording somebody
       // opened on purpose is not capped — they said when it starts and they say when it stops.
       if (AMBIENT_RECORDING === name && rec.steps.length >= AMBIENT_STEP_CAP) continue;
+      // The Harness saves its own recordings. Taping its steps too saved every drive twice: once as
+      // the Harness's flow and again, at session end, as a `drive-*` copy with a guessed name.
+      if (AMBIENT_RECORDING === name && this.byHarness()) continue;
       // A step nobody marked ended where the next one began.
       const previous = rec.steps.at(-1);
       if (previous !== undefined && previous.endPage === undefined && step.page !== undefined) {

@@ -538,9 +538,8 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   // `<url>` stays a placeholder in this string on purpose: `guidance-commands-run` feeds every
   // command we print to the real parser, and an interpolated value reads there as a missing operand.
   // The live url is named in the sentence instead, where a reader needs it anyway.
-  // Both routes, because `explore` needs a model: without ANTHROPIC_API_KEY it answers "No model
-  // configured to drive the app". Naming only that one hands the reader a dead end on any machine
-  // without a key, which is the same defect this release spent its time removing everywhere else.
+  // Both routes, because `explore` runs on the platform: without a linked project it refuses.
+  // Naming only that one hands the reader a dead end on any machine without one.
   // A heading and a numbered list rather than one paragraph: a reader scans for what to do next.
   //
   // This was a single 524-character note, measured on a real first run: eighty-three words, no
@@ -565,9 +564,8 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
   );
   note(
     '  2. Or hand over the whole drive: `reticle_verify { action: "explore", persona: "<who does ' +
-      'what>" }` records what it drove, so later runs replay with no model in the loop. Needs ' +
-      'a Reticle Harness plan on a linked project, or your own ANTHROPIC_API_KEY, JEV_API_KEY or ' +
-      'OPENAI_API_KEY.',
+      'what>" }` records what it drove, so later runs replay with no model in the loop. Runs on ' +
+      'the Reticle platform: needs a linked project (`reticle connect`); Free includes monthly Harness credits.',
   );
   return {
     ok: true,

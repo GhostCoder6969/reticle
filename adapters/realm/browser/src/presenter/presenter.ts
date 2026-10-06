@@ -205,6 +205,7 @@ export class Presenter {
           if (this.#shell.isCollapsed()) this.#shell.expand();
         },
         onHideUntilRestart: () => this.#applyHideUntilRestart(),
+        onKill: () => options.onKill?.(),
         onSettingsChange: (s) => this.#onSettingsChange(s),
         // Emitted like every other human control. The panel does not store this: the platform owns
         // it, because the dashboard offers the same switch.

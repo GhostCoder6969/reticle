@@ -56,11 +56,28 @@ describe('chat views and harness access states', () => {
     expect(root.textContent).toContain(
       'Describe a user and Reticle drives the whole journey for you',
     );
-    expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Explore Harness');
-    // The console has no /harness page; it redirected to the home page. Harness needs a plan.
+    expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('See plans');
+    // The console has no /harness page; it redirected to the home page. Credits live on Plan.
     expect(root.querySelector('.reticle-harness-link')?.getAttribute('href')).toBe(
       'https://app.reticle.sh/settings?group=billing',
     );
+    expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
+  });
+
+  it('says how many Harness credits are left beside the switch', () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: true });
+    views.paintHarness({ ...entitled, credits: { used: 188, limit: 500 } });
+    expect(root.textContent).toContain('312 of 500 Harness credits left this month');
+    expect(root.querySelector('[data-reticle-harness-switch]')).not.toBeNull();
+  });
+
+  it('points at Pro, not at a dead switch, once the credits are spent', () => {
+    const { root, views } = mountViews();
+    views.paintAccount({ signedIn: true });
+    views.paintHarness({ ...entitled, credits: { used: 500, limit: 500 } });
+    expect(root.textContent).toContain('All 500 Harness credits used this month');
+    expect(root.querySelector('.reticle-harness-link')?.textContent).toContain('Pro');
     expect(root.querySelector('[data-reticle-harness-switch]')).toBeNull();
   });
 

@@ -307,8 +307,11 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * Raised again to 249,700 when the project-chosen test-id attribute (#1395) met this release's HUD
  * work: every query, observer and recorder now reads the attribute name instead of a literal, and
  * the two together measured 248,736.
+ *
+ * Raised to 250,800 when an act started reporting which of several same-named controls it hit, so a
+ * recorded step replays the same one: measured 249,804.
  */
-const MAX_FIRST_LOAD_BYTES = 249_700;
+const MAX_FIRST_LOAD_BYTES = 250_800;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

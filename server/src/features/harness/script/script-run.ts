@@ -25,7 +25,9 @@ import {
   type ScriptLeafStep,
   type ScriptStep,
 } from '@reticlehq/core/artifacts';
+import { checkTally } from '../drive-report.js';
 import {
+  DEFAULT_MAX_STEPS,
   StopReason,
   type HarnessResult,
   type HarnessToolset,
@@ -56,7 +58,8 @@ export interface ScriptRun {
   lines: string[];
 }
 
-const OPEN_GOAL_STEPS = 12;
+/** A planned open journey gets the same budget a named persona drive gets. */
+const OPEN_GOAL_STEPS = DEFAULT_MAX_STEPS;
 
 export async function runScript(
   script: DriveScript,
@@ -256,7 +259,10 @@ async function runLeaf(
         const drive = await ports.drive(tools, step.goal, step.maxSteps ?? OPEN_GOAL_STEPS);
         drives.push(drive);
         if (StopReason.STOPPED === drive.stopReason) stop();
-        return drive.proved;
+        // Passed means its checks held, not that it ran one: a refund journey whose two checks both
+        // failed was marked passed because a check had run.
+        const tally = checkTally(drive.toolCalls);
+        return 0 < tally.held && 0 === tally.failed;
       }
       const result = await call(tools, ReticleTool.ACT_AND_WAIT, {
         ...(step.target === undefined ? {} : { target: step.target }),

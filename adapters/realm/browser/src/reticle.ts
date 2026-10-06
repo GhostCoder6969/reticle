@@ -153,6 +153,10 @@ export function connectionPolicy(
   return { allowed: true };
 }
 
+/** Console line after the HUD's Kill Reticle, so the way back is written down somewhere. */
+const KILLED_MESSAGE =
+  '[Reticle] killed for this page. Restart your dev server or reload the page to bring it back.';
+
 /** HUD summary when the SDK self-ends a session because the bridge (server/agent) became unreachable. */
 const BRIDGE_LOST_SUMMARY =
   'Session ended - lost connection to Reticle (the agent is no longer running).';
@@ -534,6 +538,12 @@ export class Reticle {
         // How the person uses the HUD, as control names. Taken off the wire by the daemon before the
         // event buffer, so it is telemetry and never evidence.
         panelOptions.onHudUse = (use) => this.#emit(EventType.HUD_USED, { ...use });
+        // Kill Reticle: the whole SDK leaves the page. Nothing persists it, so a dev-server restart
+        // (or a reload) brings Reticle back - which is exactly what the button's warning promises.
+        panelOptions.onKill = () => {
+          this.disconnect();
+          nativeWarn(KILLED_MESSAGE);
+        };
         const panel = new Presenter(panelOptions);
         this.#presenter = panel;
         panel.mount();

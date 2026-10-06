@@ -10,7 +10,6 @@
 
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
-import { proposePersonas } from '@/features/harness/platform/personas.js';
 import { randomUUID } from 'node:crypto';
 import {
   ReticleEnv,
@@ -23,32 +22,13 @@ import {
 import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
-import {
-  harnessDriver,
-  harnessOptionsFromEnv,
-  type HarnessDriverOptions,
-} from '@/features/harness/driver.js';
-import { fillValues } from '@/features/harness/fill-values.js';
 import { checkTally, verdictLine } from '@/features/harness/drive-report.js';
-import { openFillValues, type FillValueStore } from '@/memory/project/dir/fill-value-store.js';
-import {
-  ANTHROPIC_DRIVER_NAME,
-  CUSTOM_DRIVER_NAME,
-  DRIVER_NAMES,
-  JEV_DRIVER_NAME,
-  OPENAI_DRIVER_NAME,
-  SERVER_DRIVER,
-} from '@/features/harness/drivers.js';
-import { jevDriver, jevOptionsFromEnv, type DrivePlanStep } from '@/features/harness/jev-driver.js';
+import { CUSTOM_DRIVER_NAME, SERVER_DRIVER } from '@/features/harness/drivers.js';
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
 import { readContract } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { buildHarnessPlan, planAsText, withoutReplays, type HarnessPlan } from './harness-plan.js';
-import {
-  openAiDriver,
-  openAiOptionsFromEnv,
-  type OpenAiDriverOptions,
-} from '@/features/harness/openai-driver.js';
+import { allSessionIntents } from '@/memory/intent/open-intents.js';
 import { fetchPlatformConfig, type ConfigFetch } from '@/features/harness/platform-config.js';
 import {
   DEFAULT_MAX_STEPS,
@@ -61,7 +41,6 @@ import {
 } from '@/features/harness/harness.js';
 import { reticleToolset } from './harness-toolset.js';
 import { checkGoals, goalsIn, type GoalCheck } from '@/features/harness/goals.js';
-import { secretEnvKey } from '@/language/flows/flows.js';
 
 export interface ExploreOptions {
   /** Who to be, or what to accomplish. Appended to the standing instruction. */
@@ -144,25 +123,15 @@ export interface ExploreResult {
  * print it, and two copies of this sentence would drift.
  */
 export const MSG_NO_HARNESS_KEY =
-  `No model configured to drive the app: set ${ReticleEnv.HARNESS_KEY}, or run \`reticle connect\` ` +
-  `(the platform's model needs a plan or trial), to let Reticle explore it for you. Without either, ` +
-  `drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: what you ` +
-  `drive is saved as a flow just the same.`;
+  `The Reticle Harness runs on the Reticle platform, and every plan includes it (Free comes with ` +
+  `monthly Harness credits): run \`reticle connect\` to link this project and sign in. ` +
+  `Without it, drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: ` +
+  `what you drive is saved as a flow just the same.`;
 
-/** Asked for Jev specifically and it is not configured. Distinct from having no model at all. */
-export const MSG_NO_JEV_KEY =
-  `The \`${JEV_DRIVER_NAME}\` driver was asked for but is not configured: set ` +
-  `${ReticleEnv.HARNESS_JEV_KEY}, or run \`reticle link\` and set ${ReticleEnv.CLOUD_KEY}. ` +
-  `Refusing rather than quietly driving with another model, which would misattribute the result.`;
-
-/** Asked for OpenAI specifically and it is not configured. Never substituted, same as Jev. */
-export const MSG_NO_OPENAI_KEY =
-  `The \`${OPENAI_DRIVER_NAME}\` driver was asked for but is not configured: set ` +
-  `${ReticleEnv.HARNESS_OPENAI_KEY}, or run \`reticle link\` and set ${ReticleEnv.CLOUD_KEY}. ` +
-  `Refusing rather than quietly driving with another model, which would misattribute the result.`;
-
+/** A driver named that this build no longer has: every Harness decision is the platform's now. */
 const msgUnknownDriver = (asked: string): string =>
-  `Unknown harness driver \`${asked}\`. Known drivers: ${DRIVER_NAMES.join(', ')}.`;
+  `The Harness driver \`${asked}\` is not available: the Harness runs on the Reticle platform, ` +
+  `which drives with the model set for the project in the dashboard.`;
 
 /**
  * The environment, plus the credential this machine already has.
@@ -202,13 +171,12 @@ export async function withLinkedCredential(
   }
 }
 
-/** Is there a model the harness can drive with? A read, because "not configured" is not a failure. */
+/**
+ * Can this machine reach the Harness? Only through the platform: a linked project or a platform
+ * key. Whether the workspace is entitled is the platform's answer, asked when the drive starts.
+ */
 export function harnessAvailable(env: Record<string, string | undefined>): boolean {
-  return (
-    harnessOptionsFromEnv(env) !== undefined ||
-    jevOptionsFromEnv(env) !== undefined ||
-    openAiOptionsFromEnv(env) !== undefined
-  );
+  return serverOptionsFromEnv(env) !== undefined;
 }
 
 /**
@@ -246,14 +214,10 @@ export async function exploreApp(
   // the saved flows, the user's request and the unproved intents fill in the rest. The plan is drawn
   // on the HUD and updated as each part runs.
   const before = new Set(await reads.flows.list());
-  if (options.focus === undefined) {
-    const platform = serverOptionsFromEnv(env);
-    const personas =
-      platform !== undefined &&
-      SERVER_DRIVER === (options.driverName ?? env[ReticleEnv.HARNESS_DRIVER])
-        ? await proposePersonas(platform, planAsText(await readPlan(reads, options.sessionId)))
-        : [];
-    const scripted = await exploreScript(deps, env, options, personas, before);
+  // Without a named journey the drive is always planned; with one, it is planned by the platform
+  // when there is one, and driven here as before when there is not.
+  if (options.focus === undefined || serverOptionsFromEnv(env) !== undefined) {
+    const scripted = await exploreScript(deps, env, options, before);
     if (scripted !== undefined) return scripted;
   }
 
@@ -262,21 +226,10 @@ export async function exploreApp(
   // every saved flow, the consequence that must hold for each, and the declared intent nobody has
   // tested — which is the whole of what a drive should be deciding against.
   const plan = await readPlan(reads, options.sessionId);
-  /*
-   * The fixtures this project has already paid for.
-   *
-   * A drive is a sequence of DECISIONS and, occasionally, one COMPOSITION: what to type into a box
-   * whose label nothing can guess from. The cheap driver cannot write a string at all, so those
-   * boxes used to receive the words "reticle harness". This is the seam where a generating model
-   * answers instead -- for about 6% of steps, once per label, and never again on any later drive,
-   * because the answer is written into `.reticle` beside the flows that use it.
-   */
-  const fills = await openFillValues(deps.fs, safeRoot(deps, options.sessionId));
-  const requested =
-    options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
+  const driving = withoutReplays(plan);
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, withoutReplays(plan), requested, fills, options.focus)
+      ? buildDriver(env, maxSteps, driving, options.driverName, options.focus)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
@@ -298,7 +251,7 @@ export async function exploreApp(
     // rather than remembered from a first one. `focus` is the caller's own words and goes last:
     // somebody who named a journey meant that journey, whatever the project's backlog says.
     focus: [
-      planAsText(withoutReplays(plan)),
+      planAsText(driving),
       ...(options.focus === undefined ? [] : [`Focus: ${options.focus}`]),
     ].join('\n\n'),
   });
@@ -308,10 +261,6 @@ export async function exploreApp(
       ? `Autonomous driving switched off — the Harness stopped after ${String(drive.steps)} steps. What it drove is kept.`
       : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
   );
-  // Written once, after the drive, whatever the drive did: a run that broke still learned what it
-  // learned, and the next one should not pay for it again.
-  await fills.flush();
-
   // MANDATORY, and deliberately outside the loop. A drive that runs out of budget mid-journey, or
   // breaks, or whose model simply stops asking for tools, leaves a recording open and everything it
   // drove unsaved — work paid for and thrown away. Saving is not a decision any model gets to make
@@ -347,6 +296,15 @@ export function narrator(deps: ToolDeps, options: ExploreOptions): (text: string
       /* nobody is watching: the drive still runs */
     }
   };
+}
+
+/** What this project's memory says must hold, in its own words. Nothing recorded is none. */
+export async function productRules(deps: ToolDeps, sessionId?: string): Promise<string[]> {
+  try {
+    return (await allSessionIntents(deps, sessionId)).map((intent) => intent.statement);
+  } catch {
+    return [];
+  }
 }
 
 /** `deps` whose flow store is the session's own project, where the drive's saves land. */
@@ -458,31 +416,6 @@ export function reconcileFlows(
 }
 
 /**
- * The driver this project chose on the platform, if it chose one, we can reach it, and we have it.
- *
- * Only asked when nobody has been explicit, so the cost is paid exactly once per drive and never on
- * a path where it could not change the answer. An unreachable platform returns undefined and the
- * environment decides, exactly as it did before this lookup existed.
- *
- * A preference naming a driver this build does not have is IGNORED rather than refused, and that
- * asymmetry with the per-call argument is deliberate. The platform offers providers this daemon may
- * be too old to know about — it already offers `openai`, which has no binding here — so a stored
- * preference is a statement about the account, not an instruction for this drive, and a daemon that
- * refused to run because a web UI knew one more word than it does would be broken by its own
- * upgrade cycle. Naming a driver in the CALL is an instruction, and an unknown one is still an
- * error there.
- *
- * It is not a silent substitution either way: the result reports the driver that actually drove.
- */
-export async function preferredDriver(
-  env: Record<string, string | undefined>,
-  options: ExploreOptions,
-): Promise<string | undefined> {
-  if (true === options.skipPlatformConfig) return undefined;
-  return knownDriver((await platformConfig(env, options))?.provider);
-}
-
-/**
  * What a person said about autonomous driving on the platform, honoured here.
  *
  * The switch existed, persisted and round-tripped, and the daemon read it and threw it away — so
@@ -500,45 +433,17 @@ export const MSG_HARNESS_DISABLED =
 /**
  * The other reason a drive can be refused, and it is NOT the same reason.
  *
- * A drive through the platform spends Reticle's model budget. That is free for three months and
- * included on a paid plan, and outside both it is somebody else's money being spent on nothing. The
- * message says which of the two it is and what to do, because "the harness is off" told to a person
- * who never turned anything off is a support ticket rather than an answer.
+ * A drive through the platform spends Reticle's model budget, bounded by the workspace's monthly
+ * Harness credits. The platform answers this only when something other than the switch stops it.
  */
 export const MSG_HARNESS_UNCLAIMED =
-  'This workspace has no Harness plan, so autonomous driving would run on Reticle’s model budget ' +
-  'with nothing paying for it. Start a trial or plan in the Reticle dashboard (Settings → Billing), ' +
-  'or export a model API key of your own and drive with that.';
+  'The Reticle platform says this workspace cannot drive the Harness right now. Every workspace, ' +
+  'Free included, gets Harness credits each month: see Settings → Plan in the Reticle dashboard.';
 
 /** The platform could not be asked, and the drive would spend Reticle's budget without its yes. */
 export const MSG_HARNESS_UNCONFIRMED =
-  'Could not confirm Harness access with the Reticle platform, so the drive did not start: it would ' +
-  'run on Reticle’s model budget unchecked. Try again in a moment, or export a model API key of ' +
-  'your own and drive with that.';
-
-/** The platform holds no key for this project's model, so a drive through it would fail mid-run. */
-export const MSG_HARNESS_NO_PROVIDER =
-  'The Reticle platform has no model ready for this project yet, so the drive did not start. Check ' +
-  'Settings → Projects → Verification in the dashboard, or export a model API key of your own.';
-
-/**
- * Whether a drive would be paid for by the person asking for it.
- *
- * Entitlement gates OUR spend, so it has no business stopping somebody who brought their own key:
- * their harness costs us nothing whether they ever claim anything or not. Reading the same options
- * the drivers read keeps the two answers from drifting apart.
- */
-function ownsAModelKey(env: Record<string, string | undefined>): boolean {
-  // The DIRECT variables only. Every driver also accepts the platform key as a fallback, so asking
-  // `jevOptionsFromEnv` here would answer "they have a key" for exactly the person whose drive would
-  // be billed to us — which is the one case this gate exists for.
-  return [ReticleEnv.HARNESS_KEY, ReticleEnv.HARNESS_JEV_KEY, ReticleEnv.HARNESS_OPENAI_KEY].some(
-    (name) => {
-      const value = env[name];
-      return value !== undefined && 0 < value.length;
-    },
-  );
-}
+  'Could not confirm Harness access with the Reticle platform, so the drive did not start. Try ' +
+  'again in a moment.';
 
 /** One read, however many questions are asked of the answer. */
 function platformConfig(env: Record<string, string | undefined>, options: ExploreOptions) {
@@ -564,32 +469,14 @@ export async function refusedByPlatform(
   options: ExploreOptions,
 ): Promise<string | undefined> {
   if (true === options.skipPlatformConfig) return undefined;
+  // No platform, no Harness: it runs there, on the workspace's credits.
+  if (serverOptionsFromEnv(env) === undefined) return MSG_NO_HARNESS_KEY;
   const config = await platformConfig(env, options);
-  if (config !== undefined && !config.harnessEnabled) return MSG_HARNESS_DISABLED;
-  // Their key, their spend: nothing below is any of our business.
-  if (ownsAModelKey(env)) return undefined;
-  // No platform key either: there is no budget to protect, and the driver says what is missing.
-  const platformKey = env[ReticleEnv.API_KEY];
-  if (platformKey === undefined || 0 === platformKey.length) return undefined;
-  // From here the drive bills Reticle, so it needs a confirmed yes, not the absence of a no.
+  // It needs a confirmed yes, not the absence of a no. The platform also checks on every turn.
   if (config === undefined) return MSG_HARNESS_UNCONFIRMED;
+  if (!config.harnessEnabled) return MSG_HARNESS_DISABLED;
   if (!config.harnessEntitled) return MSG_HARNESS_UNCLAIMED;
-  // The platform's own Harness (the default here) uses the platform's model and refuses for itself;
-  // the provider check is for a LOCAL driver asked for by name that would spend through the proxy.
-  const asked = options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? config.provider;
-  if (SERVER_DRIVER !== asked && !config.providerReady) return MSG_HARNESS_NO_PROVIDER;
   return undefined;
-}
-
-/**
- * A stored preference, kept only if this build can actually honour it.
- *
- * Exported because it is the whole of the asymmetry with the per-call argument, and the asymmetry
- * is the part somebody will later think is a bug.
- */
-export function knownDriver(provider: string | undefined): string | undefined {
-  if (provider === undefined) return undefined;
-  return DRIVER_NAMES.some((name) => name === provider) ? provider : undefined;
 }
 
 /**
@@ -658,9 +545,13 @@ export function openRecordingName(toolCalls: readonly ToolOutcome[]): string | u
  */
 export async function readFlows(deps: ToolDeps): Promise<FlowFile[]> {
   const flows: FlowFile[] = [];
-  for (const name of await deps.flows.list()) {
-    const loaded = await deps.flows.load(name);
-    if (loaded.ok) flows.push(loaded.value);
+  try {
+    for (const name of await deps.flows.list()) {
+      const loaded = await deps.flows.load(name);
+      if (loaded.ok) flows.push(loaded.value);
+    }
+  } catch {
+    // An unreadable store plans from what it could read, as `readPlan` does.
   }
   return flows;
 }
@@ -687,53 +578,23 @@ export async function readPlan(deps: ToolDeps, sessionId?: string): Promise<Harn
   }
 }
 
-/**
- * The project directory, or nothing.
- *
- * `sessionRoot` needs a session and a project to answer, and a drive can legitimately be asked for
- * before either is resolvable. Everything else that reads `.reticle` here already treats that as
- * "no project record" rather than as a failure; the fixtures file is no different, and a throw on
- * this path would turn a missing directory into a refused drive.
- */
-export function safeRoot(deps: ToolDeps, sessionId?: string): string | undefined {
-  try {
-    return sessionRoot(deps, sessionId);
-  } catch {
-    return undefined;
-  }
-}
-
 export function pinned(options: ExploreOptions): { sessionId?: string } {
   return options.sessionId === undefined ? {} : { sessionId: options.sessionId };
 }
 
 /**
- * Pick the driver.
- *
- * The Anthropic driver stays the default, and an explicit `RETICLE_HARNESS_DRIVER=jev` is the only
- * thing that moves off it when both are configured — a driver change is a change in how the app gets
- * driven, and inferring one from which key happens to be exported would swap it under people who
- * merely linked their account.
- *
- * The fall-through is the other direction and is not a preference: with no Anthropic key and a
- * platform key present, Jev is not the cheaper option, it is the only one. Choosing it there is what
- * makes the harness work for somebody who never had a model API key of their own, which is most
- * people — and the reason this driver is worth having at all.
+ * The driver: the platform's Harness, which decides every step on its side while this machine
+ * executes. There is no other: the decisions, the models and the planning run only on the platform.
  */
 export function buildDriver(
   env: Record<string, string | undefined>,
   maxSteps: number,
   plan: HarnessPlan,
   requested?: string,
-  fills?: FillValueStore,
   persona?: string,
 ): { driver: ModelDriver; name: string } {
-  const local = (): { driver: ModelDriver; name: string } =>
-    buildLocalDriver(env, maxSteps, plan, requested, fills);
-  // The platform's Harness, when asked for by name or when the platform names it as this project's
-  // driver (the platform's config is the rollout switch). Asked for, it must be configured: never a
-  // quiet substitution.
-  if (SERVER_DRIVER !== requested) return local();
+  if (requested !== undefined && SERVER_DRIVER !== requested)
+    throw new Error(msgUnknownDriver(requested));
   const platform = serverOptionsFromEnv(env);
   if (platform === undefined) throw new Error(MSG_NO_HARNESS_KEY);
   return {
@@ -741,71 +602,10 @@ export function buildDriver(
       ...platform,
       ...(persona === undefined ? {} : { persona }),
       plan: planAsText(plan),
+      planSteps: plan.steps,
+      vocabulary: plan.vocabulary,
       maxSteps,
     }),
     name: SERVER_DRIVER,
   };
-}
-
-function buildLocalDriver(
-  env: Record<string, string | undefined>,
-  maxSteps: number,
-  plan: HarnessPlan,
-  requested?: string,
-  fills?: FillValueStore,
-): { driver: ModelDriver; name: string } {
-  // The two halves of what `.reticle` knows, handed to the one driver that can use both: what is
-  // worth doing, and the names the app uses for what it does. The second is what lets a declared
-  // consequence be SAVED rather than merely proved; see `consequencesFor`.
-  const fromReticle = {
-    plan: plan.steps as readonly DrivePlanStep[],
-    vocabulary: plan.vocabulary,
-    /*
-     * Generation is offered ONLY when a generating model is already configured, and it stays out of
-     * the per-turn loop either way: put a text model on every turn and you pay its per-turn tax on
-     * the 94% of steps that are clicks, which is the entire cost the cheap driver exists to avoid.
-     * With no such key the label heuristic answers, exactly as it did before this existed.
-     */
-    fillValue: fillValues({
-      secret: (label) => env[secretEnvKey(label)],
-      ...(fills === undefined ? {} : { cache: fills }),
-      // GPT first: a linked machine reaches it through the platform with no key of its own.
-      ...(openAiOptionsFromEnv(env) === undefined
-        ? {}
-        : { openai: openAiOptionsFromEnv(env) as OpenAiDriverOptions }),
-      ...(harnessOptionsFromEnv(env) === undefined
-        ? {}
-        : { generator: harnessOptionsFromEnv(env) as HarnessDriverOptions }),
-    }),
-  };
-  const jev = jevOptionsFromEnv(env);
-  const anthropic = harnessOptionsFromEnv(env);
-  const asked = requested;
-
-  // A driver that was ASKED for and is not configured is an error, never a substitution. Quietly
-  // falling back would make every comparison between two drivers a possible lie about which one
-  // produced the result — and comparing them is the main reason anyone names one.
-  if (JEV_DRIVER_NAME === asked) {
-    if (jev === undefined) throw new Error(MSG_NO_JEV_KEY);
-    // The Jev driver is told the budget because it has a teardown to reach; the Anthropic driver is
-    // not, because it calls `finish` itself and being handed a number it did not ask for is how a
-    // second copy of the budget starts drifting from the loop's.
-    return { driver: jevDriver({ ...jev, maxSteps, ...fromReticle }), name: JEV_DRIVER_NAME };
-  }
-  if (ANTHROPIC_DRIVER_NAME === asked) {
-    if (anthropic === undefined) throw new Error(MSG_NO_HARNESS_KEY);
-    return { driver: harnessDriver(anthropic), name: ANTHROPIC_DRIVER_NAME };
-  }
-  if (OPENAI_DRIVER_NAME === asked) {
-    const openai = openAiOptionsFromEnv(env);
-    if (openai === undefined) throw new Error(MSG_NO_OPENAI_KEY);
-    return { driver: openAiDriver(openai), name: OPENAI_DRIVER_NAME };
-  }
-  if (asked !== undefined && 0 < asked.length) throw new Error(msgUnknownDriver(asked));
-
-  if (anthropic !== undefined)
-    return { driver: harnessDriver(anthropic), name: ANTHROPIC_DRIVER_NAME };
-  if (jev !== undefined)
-    return { driver: jevDriver({ ...jev, maxSteps, ...fromReticle }), name: JEV_DRIVER_NAME };
-  throw new Error(MSG_NO_HARNESS_KEY);
 }

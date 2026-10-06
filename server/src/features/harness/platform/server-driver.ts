@@ -7,8 +7,8 @@
  * hands the outcomes back here. Nothing is held open between turns, a lost response is retried with
  * the same turn number, and the platform answers that from its record without a second model call.
  *
- * A platform that does not serve the Harness yet (404 at start) is not an error a person can act
- * on: the drive carries on with `fallback`, the local path this machine used before, and says so.
+ * This is the only Harness driver: every decision is the platform's, for a workspace with a plan or
+ * trial. A secret field travels by name only, and its value is filled in here before the call runs.
  */
 import { ReticleEnv, cloudUrlFrom } from '@reticlehq/core';
 import {
@@ -24,7 +24,6 @@ export const SERVER_DRIVER_NAME = 'server';
 const RUNS_PATH = '/v1/harness/runs';
 const TURN_TIMEOUT_MS = 110_000;
 const RETRIES = 1;
-const NOT_SERVED = new Set([404, 405]);
 /** The platform's code for a run whose project had autonomous driving switched off. */
 const HARNESS_OFF = 'harness_off';
 const FINISH = 'finish';
@@ -39,11 +38,14 @@ export interface ServerDriverOptions {
   mode?: string;
   /** What `.reticle` already knows, as text: saved journeys and open intents. */
   plan?: string;
+  /** The same plan, structured, for the platform's Jev engine. */
+  planSteps?: readonly { kind: string; target: string; why: string }[];
+  /** The signal names the app declares, so the engine can claim one by name. */
+  vocabulary?: readonly string[];
+  /** Where secret field values live. Only their NAMES go to the platform. Defaults to `process.env`. */
+  env?: Record<string, string | undefined>;
   maxSteps?: number;
-  fallback?: ModelDriver;
   fetch?: FetchLike;
-  /** Told once when the drive falls back, so the result can say which driver drove. */
-  onFallback?: (why: string) => void;
 }
 
 interface TurnReply {
@@ -81,7 +83,6 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
   let runId: string | undefined;
   let turn = 0;
   let seen = 0;
-  let fellBack = false;
 
   const call = async (path: string, body: unknown): Promise<unknown> => {
     let last: unknown;
@@ -115,31 +116,20 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
 
   return {
     async turn(input): Promise<ModelTurn> {
-      if (fellBack && options.fallback !== undefined) return options.fallback.turn(input);
       if (runId === undefined) {
-        try {
-          const started = (await call(RUNS_PATH, {
-            ...(options.persona === undefined ? {} : { persona: options.persona }),
-            ...(options.mode === undefined ? {} : { mode: options.mode }),
-            ...(options.plan === undefined ? {} : { plan: options.plan }),
-            ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
-            tools: input.tools.filter((t) => FINISH !== t.name).map(toolSpec),
-          })) as { runId?: unknown };
-          if ('string' !== typeof started.runId)
-            throw new ServerHarnessError('the platform started no run', 502);
-          runId = started.runId;
-        } catch (error) {
-          if (
-            error instanceof ServerHarnessError &&
-            NOT_SERVED.has(error.status) &&
-            options.fallback !== undefined
-          ) {
-            fellBack = true;
-            options.onFallback?.('the platform does not run the Harness yet');
-            return options.fallback.turn(input);
-          }
-          throw error;
-        }
+        const started = (await call(RUNS_PATH, {
+          ...(options.persona === undefined ? {} : { persona: options.persona }),
+          ...(options.mode === undefined ? {} : { mode: options.mode }),
+          ...(options.plan === undefined ? {} : { plan: options.plan }),
+          ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
+          ...(options.planSteps === undefined ? {} : { planSteps: options.planSteps }),
+          ...(options.vocabulary === undefined ? {} : { vocabulary: options.vocabulary }),
+          secrets: secretNames(options.env ?? process.env),
+          tools: input.tools.filter((t) => FINISH !== t.name).map(toolSpec),
+        })) as { runId?: unknown };
+        if ('string' !== typeof started.runId)
+          throw new ServerHarnessError('the platform started no run', 502);
+        runId = started.runId;
       }
       // Only what happened since the last turn: the platform holds everything before it.
       const fresh = input.history.slice(seen);
@@ -168,7 +158,13 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
           ],
         };
       }
-      return { text: reply.text, calls: reply.calls, ...usage };
+      // A field the platform knows only by name is filled here, from this machine, and never sent.
+      const env = options.env ?? process.env;
+      return {
+        text: reply.text,
+        calls: reply.calls.map((c) => ({ ...c, args: withSecrets(c.args, env) })),
+        ...usage,
+      };
     },
   };
 }
@@ -206,4 +202,35 @@ function errorMessage(text: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The prefix of a variable holding one secret field: `RETICLE_SECRET_AUTH_PASSWORD`. */
+const SECRET_ENV_PREFIX = 'RETICLE_SECRET_';
+/** What the platform types into a field whose secret this machine holds. */
+const SECRET_PLACEHOLDER = 'reticle-secret:';
+
+/** The secret fields this machine can fill, by name only. */
+export function secretNames(env: Record<string, string | undefined>): string[] {
+  return Object.keys(env)
+    .filter((key) => key.startsWith(SECRET_ENV_PREFIX) && 0 < (env[key] ?? '').length)
+    .map((key) => key.slice(SECRET_ENV_PREFIX.length));
+}
+
+/** The call's arguments with every secret placeholder replaced by its value from this machine. */
+export function withSecrets(
+  args: Record<string, unknown>,
+  env: Record<string, string | undefined>,
+): Record<string, unknown> {
+  const swap = (value: unknown): unknown => {
+    if ('string' === typeof value && value.startsWith(SECRET_PLACEHOLDER)) {
+      const field = value.slice(SECRET_PLACEHOLDER.length);
+      const name = field.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase();
+      return env[`${SECRET_ENV_PREFIX}${name}`] ?? value;
+    }
+    if (Array.isArray(value)) return value.map(swap);
+    if ('object' === typeof value && null !== value)
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, swap(v)]));
+    return value;
+  };
+  return swap(args) as Record<string, unknown>;
 }

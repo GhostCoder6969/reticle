@@ -41,7 +41,7 @@ npx @reticlehq/server config --runs on|off --flows on|off --memory on|off
 
 `--memory` covers the coverage ledger and the HUD notes as well, and the notes are the words people typed. The user's request (`request.json`, the prompt the agent relayed, redacted) goes to the platform with the runs from a linked project, so the dashboard can show what each run was for; `"shareRequests": false` in `.reticle.json` keeps it on the machine. An unlinked project sends it nowhere, and it is kept out of git either way.
 
-When the Harness drives through the platform (`driver: "server"`) or a model provider you configured, that service sees what it drives: each step's result goes to it so it can choose the next one.
+The Harness runs on the platform, so the platform sees what it drives: each step's result goes there so it can choose the next one. A secret field is sent by name only; its value is typed in on your machine.
 
 ## Telemetry, which is separate from all of the above
 

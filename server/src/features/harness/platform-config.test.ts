@@ -92,6 +92,14 @@ describe('reading the driver preference from the platform', () => {
     });
   });
 
+  it("carries the workspace's Harness credits when the platform reports them", async () => {
+    const got = await fetchPlatformConfig(
+      LINKED,
+      answering({ provider: 'jev', credits: { used: 12, limit: 500 } }),
+    );
+    expect(got?.credits).toEqual({ used: 12, limit: 500 });
+  });
+
   /** An older API reports neither field, and silence must not read as a refusal on either. */
   it('treats a missing harnessEntitled as entitled', async () => {
     const got = await fetchPlatformConfig(LINKED, answering({ provider: 'jev' }));

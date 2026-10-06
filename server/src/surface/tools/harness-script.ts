@@ -7,10 +7,8 @@
  * the HUD and redrawn as each part starts and ends.
  */
 import { randomUUID } from 'node:crypto';
-import { ReticleCommand, ReticleEnv, ScriptStatus } from '@reticlehq/core';
+import { ReticleCommand, ScriptStatus } from '@reticlehq/core';
 import { PromptContextSchema, checkScript } from '@reticlehq/core/artifacts';
-import type { Persona } from '@/features/harness/platform/personas.js';
-import { planScript } from '@/features/harness/script/script-planner.js';
 import {
   runScript,
   type ScriptPorts,
@@ -24,7 +22,6 @@ import {
   type HarnessResult,
   type ModelDriver,
 } from '@/features/harness/harness.js';
-import { openFillValues } from '@/memory/project/dir/fill-value-store.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
@@ -32,7 +29,16 @@ import { leasableAppUrl } from '@/language/flows/flow-tools.js';
 import type { ToolDeps } from './tool-kit.js';
 import { acquireLeasedSession } from './lease-tools.js';
 import { reticleToolset } from './harness-toolset.js';
-import { PlanStepKind, planAsText, withoutReplays } from './harness-plan.js';
+import {
+  PlanStepKind,
+  aboutTheApp,
+  planAsText,
+  withoutReplays,
+  type HarnessPlan,
+} from './harness-plan.js';
+import { personasIn, proposeScript } from '@/features/harness/platform/script.js';
+import { checkGoals, goalsIn } from '@/features/harness/goals.js';
+import { serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import {
   MSG_HARNESS_DISABLED,
   bankOpenRecording,
@@ -41,13 +47,12 @@ import {
   maxStepsFromEnv,
   narrator,
   pinned,
-  preferredDriver,
+  productRules,
   readFlows,
   readPlan,
   reconcileFlows,
   recordPersona,
   refusedByPlatform,
-  safeRoot,
   withProjectFlows,
   type ExploreOptions,
   type ExploreResult,
@@ -65,7 +70,7 @@ const MAX_LANES = 4;
 const STOP_POLL_MS = 10_000;
 
 /**
- * Plan the drive, then run the plan: saved flows replayed in lanes side by side, shared starts
+ * The platform plans the drive; this machine runs the plan: saved flows replayed in lanes side by side, shared starts
  * driven once and branched from, open journeys handed to the model. `undefined` when there is
  * nothing to plan from, so the caller drives the app with no plan, as before.
  */
@@ -73,32 +78,56 @@ export async function exploreScript(
   deps: ToolDeps,
   env: Record<string, string | undefined>,
   options: ExploreOptions,
-  personas: readonly Persona[],
   before: ReadonlySet<string>,
 ): Promise<ExploreResult | undefined> {
   const reads = withProjectFlows(deps, options.sessionId);
   const plan = await readPlan(reads, options.sessionId);
-  const replay = plan.steps.filter((s) => PlanStepKind.REPLAY === s.kind).map((s) => s.target);
-  const goals = await memoryGoals(deps, options.sessionId);
-  if (0 === replay.length && 0 === personas.length && 0 === goals.length) return undefined;
-  const script = planScript({
-    flows: await readFlows(reads),
+  // A named journey is the whole plan: no other flows replayed, no personas proposed beside it.
+  const focus = options.focus;
+  const replay =
+    focus === undefined
+      ? plan.steps.filter((s) => PlanStepKind.REPLAY === s.kind).map((s) => s.target)
+      : [];
+  const goals = focus === undefined ? await memoryGoals(deps, options.sessionId) : [focus];
+  const gaps = plan.steps.filter((s) => PlanStepKind.DRIVE === s.kind).map((s) => s.why);
+  const flows = await readFlows(reads);
+  const known = await productRules(deps, options.sessionId);
+  // The platform plans: personas, order, branches and the product rules each journey proves.
+  // A platform that cannot plan leaves the caller to drive the journey through it unplanned.
+  const platform = serverOptionsFromEnv(env);
+  if (platform === undefined) return undefined;
+  // No `about` for a named journey: the platform proposes personas only when it is given one.
+  const about =
+    focus === undefined
+      ? await aboutTheApp(planAsText(plan), (name, args) =>
+          reticleToolset(deps, pinned(options)).invoke(name, args),
+        )
+      : '';
+  const personas = focus === undefined ? personasIn(flows) : [];
+  const script = await proposeScript(platform, {
+    about,
+    flows,
     replay,
-    personas,
     goals,
-    gaps: plan.steps.filter((s) => PlanStepKind.DRIVE === s.kind).map((s) => s.why),
+    gaps,
+    rules: known,
+    personas,
   });
-  if (0 < checkScript(script).length) return undefined;
+  if (script === undefined || 0 < checkScript(script).length) return undefined;
 
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
-  const fills = await openFillValues(deps.fs, safeRoot(deps, options.sessionId));
-  const requested =
-    options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   // The script replays the saved flows itself; a model handed them too replayed them again per goal.
   const open = withoutReplays(plan);
-  const driverFor = (persona?: string): { driver: ModelDriver; name: string } =>
+  // The journey itself leads (its rules are already written into it by the platform): a driver
+  // with nothing named to prove stopped after its first half.
+  const planFor = (goal?: string): HarnessPlan => {
+    if (goal === undefined) return open;
+    const journey = { kind: PlanStepKind.DRIVE, target: 'this journey, to its end', why: goal };
+    return { ...open, steps: [journey, ...open.steps] };
+  };
+  const driverFor = (persona?: string, goal?: string): { driver: ModelDriver; name: string } =>
     options.driver === undefined
-      ? buildDriver(env, maxSteps, open, requested, fills, persona)
+      ? buildDriver(env, maxSteps, planFor(goal), options.driverName, persona)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driverName = driverFor().name;
   const harness = randomUUID();
@@ -133,11 +162,14 @@ export async function exploreScript(
       }),
     drive: async (toolset, goal, steps) => {
       const persona =
-        personas.find((p) => goal.startsWith(`${p.name}:`)) === undefined ? undefined : goal;
+        focus ??
+        (script.personas.find((p) => goal.startsWith(`${p.name}:`)) === undefined
+          ? undefined
+          : goal);
       const ahead = new Set(await reads.flows.list());
-      const result = await runHarness(driverFor(persona).driver, toolset, {
+      const result = await runHarness(driverFor(persona, goal).driver, toolset, {
         maxSteps: Math.min(steps, maxSteps),
-        focus: [planAsText(open), `Focus: ${goal}`].join('\n\n'),
+        focus: [planAsText(planFor(goal)), `Focus: ${goal}`].join('\n\n'),
       });
       await bankOpenRecording(toolset, result, persona);
       if (persona !== undefined) {
@@ -149,7 +181,7 @@ export async function exploreScript(
   };
 
   narrate(
-    `Harness plan · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)` +
+    `Harness plan from the platform · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)` +
       (1 < ports.parallel ? `, ${String(ports.parallel)} at once` : ''),
   );
   let run: ScriptRun;
@@ -163,7 +195,6 @@ export async function exploreScript(
     });
   } finally {
     clearInterval(poll);
-    await fills.flush();
   }
   for (const line of run.lines) narrate(line);
   narrate(
@@ -174,8 +205,15 @@ export async function exploreScript(
 
   const sum = (pick: (r: HarnessResult) => number): number =>
     run.drives.reduce((n, r) => n + pick(r), 0);
+  // A model drive that broke breaks the run: "finished" over a platform that answered 500 hid it.
+  const broke = run.drives.find((d) => StopReason.BROKEN === d.stopReason);
   const drive: HarnessResult = {
-    stopReason: run.stopped ? StopReason.STOPPED : StopReason.FINISHED,
+    stopReason: run.stopped
+      ? StopReason.STOPPED
+      : broke !== undefined
+        ? StopReason.BROKEN
+        : StopReason.FINISHED,
+    ...(broke?.error === undefined ? {} : { error: broke.error }),
     summary: run.drives
       .map((d) => d.summary)
       .filter((t) => 0 < t.length)
@@ -203,7 +241,12 @@ export async function exploreScript(
     driverName,
     ...reconciled,
     unverifiedFlows,
-    goals: [],
+    // The texts a named journey quoted must be on the page at the end, checked as the persona
+    // drive always checked them.
+    goals: await checkGoals(
+      (name, args) => ports.toolset(pinned(options).sessionId, focus).invoke(name, args),
+      options.goals ?? goalsIn(focus),
+    ),
     planLines: [
       `Plan · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)`,
       ...run.lines,

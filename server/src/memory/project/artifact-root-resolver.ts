@@ -90,10 +90,14 @@ function daemonOwnProjectId(
 
 /**
  * Every project this machine knows the directory of: discovered `.reticle.json` files first, then
- * the user-level registry. Read on each call, since `init` can run in another terminal while the
- * daemon is up.
+ * the user-level registry, then the dev servers the build plugin announced. Read on each call, since
+ * `init` can run in another terminal while the daemon is up.
+ *
+ * Exported because sync must cover exactly the projects runs are written into. It kept its own list
+ * without the announced dev servers, so a project known only through its running dev server had its
+ * runs written to its `.reticle/runs/` and never sent, with nothing reporting a problem.
  */
-function knownProjectCandidates(): ProjectCandidate[] {
+export function knownProjectCandidates(): ProjectCandidate[] {
   let registry = emptyProjectRegistry();
   try {
     const path = join(homedir(), ReticleDir.ROOT, PROJECT_REGISTRY_FILE);

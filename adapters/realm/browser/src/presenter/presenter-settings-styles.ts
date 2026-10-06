@@ -137,6 +137,14 @@ export const SETTINGS_CSS = `
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-link-caret{display:inline-flex;align-items:center;flex:none;opacity:.55;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-link:hover{background:rgba(255,255,255,.04);color:#fff;}
 [${SETTINGS_PANEL_ATTR}] .reticle-settings-link:focus-visible{outline:2px solid rgba(59,130,246,.55);outline-offset:-2px;}
+[${SETTINGS_PANEL_ATTR}] .reticle-settings-kill{
+  width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+  border:none;border-top:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);color:#f87171;
+  font:inherit;font-size:13px;font-weight:600;padding:11px 14px;cursor:pointer;text-align:left;
+  transition:background .12s;}
+[${SETTINGS_PANEL_ATTR}] .reticle-settings-kill:hover,[${SETTINGS_PANEL_ATTR}] .reticle-settings-kill[data-armed="1"]{background:rgba(239,68,68,.18);}
+[${SETTINGS_PANEL_ATTR}] .reticle-settings-kill:focus-visible{outline:2px solid rgba(239,68,68,.6);outline-offset:-2px;}
+[${SETTINGS_PANEL_ATTR}] .reticle-settings-kill-sub{font-size:11px;font-weight:400;line-height:1.4;color:rgba(255,255,255,.55);}
 [${'data-reticle-overlay'}][${SETTINGS_ATTR}="1"] [${'data-reticle-hud'}] .reticle-tb-tip{
   opacity:0;visibility:hidden;transition-delay:0s;}
 /* The dock's accent IS the theme's active colour, published as --reticle-accent on the overlay by

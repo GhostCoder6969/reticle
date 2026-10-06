@@ -250,9 +250,18 @@ const HELP_TEXT_ATTR = 'data-reticle-settings-helptext';
 const SETTINGS_HARNESS_ROW_ATTR = 'data-reticle-settings-harness-row';
 const HARNESS_HELP =
   'Let Reticle drive this app by itself to find defects. Set here or in your dashboard — both write to the same place.';
-/** Shown instead of the switch when the workspace has no live period or plan. */
+/** Shown instead of the switch when the platform says this workspace cannot drive right now. */
 const HARNESS_LOCKED_HELP =
-  'Autonomous driving runs on Reticle’s model spend, so it needs a plan or the free period. Claim it from the chat panel.';
+  'The Harness is not available to this workspace right now. Every workspace gets free Harness credits each month: see Plan in your Reticle dashboard.';
+
+/** "312 of 500 Harness credits left this month", or nothing for an unbounded plan. */
+export function creditsLeft(credits: { used: number; limit: number } | undefined): string {
+  if (credits === undefined) return '';
+  const left = Math.max(0, credits.limit - credits.used);
+  return 0 === left
+    ? `All ${String(credits.limit)} Harness credits used this month`
+    : `${String(left)} of ${String(credits.limit)} Harness credits left this month`;
+}
 const ACCOUNT_HELP =
   'Whether this machine is signed in to a Reticle workspace. Signing in happens in your terminal.';
 
@@ -284,7 +293,11 @@ export function paintHarnessRow(root: ParentNode, config: HarnessConfig | undefi
   toggle.setAttribute('aria-checked', config.harnessEnabled && usable ? 'true' : 'false');
   toggle.setAttribute('aria-disabled', usable ? 'false' : 'true');
   const help = row.querySelector('[data-reticle-help]');
-  if (help instanceof HTMLElement) help.title = usable ? HARNESS_HELP : HARNESS_LOCKED_HELP;
+  const credits = creditsLeft(config.credits);
+  if (help instanceof HTMLElement)
+    help.title = usable
+      ? [HARNESS_HELP, credits].filter((t) => 0 < t.length).join(' ')
+      : HARNESS_LOCKED_HELP;
 }
 
 /**
@@ -319,6 +332,15 @@ const FEEDBACK_TEXT = {
   EMAIL_TITLE: `Write to ${FOUNDER_EMAIL}: a problem, a wish, anything`,
   CALL: 'Book a call',
   CALL_TITLE: 'Pick a time to talk it through',
+} as const;
+
+/** The last row in Settings. One click arms it, a second one disconnects the SDK from this page. */
+const KILL_ATTR = 'data-reticle-settings-kill';
+const KILL_TEXT = {
+  LABEL: 'Kill Reticle',
+  ARMED: 'Click again to kill Reticle',
+  WARNING:
+    'Disconnects Reticle from this page: no HUD, no agent, nothing recorded. To bring it back, restart your dev server or reload the page.',
 } as const;
 
 export function settingsPanelHtml(): string {
@@ -372,6 +394,7 @@ export function settingsPanelHtml(): string {
         <button type="button" class="reticle-settings-link" data-reticle-settings-mcp>MCP setup guide<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></button>
         <a class="reticle-settings-link" data-reticle-feedback-email href="${FOUNDER_MAILTO}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.EMAIL_TITLE}">${FEEDBACK_TEXT.EMAIL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
         <a class="reticle-settings-link" data-reticle-feedback-call href="${DISCOVERY_CALL_URL}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.CALL_TITLE}">${FEEDBACK_TEXT.CALL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
+        <button type="button" class="reticle-settings-kill" ${KILL_ATTR}><span data-reticle-kill-label>${KILL_TEXT.LABEL}</span><span class="reticle-settings-kill-sub">${KILL_TEXT.WARNING}</span></button>
         </div>
       </div>
     </div>
@@ -380,6 +403,8 @@ export function settingsPanelHtml(): string {
 
 export interface SettingsHost {
   onHideUntilRestart?: () => void;
+  /** Kill Reticle was confirmed: disconnect the SDK from this page. */
+  onKill?: () => void;
   /**
    * The harness switch was flipped. Carries the DESIRED state, not "toggle": the shell forwards it
    * to the daemon, which writes it to the platform, and a duplicate `true` is harmless where a
@@ -572,6 +597,18 @@ export class PresenterSettingsPanel {
       const dock = root.querySelector(`[${DOCK_ATTR}]`);
       if (dock instanceof HTMLElement) resetHudDockPosition(dock);
     });
+    root.querySelector(`[${KILL_ATTR}]`)?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const kill = e.currentTarget;
+      if (!(kill instanceof HTMLElement)) return;
+      if ('1' === kill.getAttribute('data-armed')) {
+        this.#host.onKill?.();
+        return;
+      }
+      kill.setAttribute('data-armed', '1');
+      const label = kill.querySelector('[data-reticle-kill-label]');
+      if (label !== null) label.textContent = KILL_TEXT.ARMED;
+    });
     closeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.close();
@@ -615,6 +652,12 @@ export class PresenterSettingsPanel {
 
   close(): void {
     if (this.#root === undefined) return;
+    const kill = this.#panel?.querySelector(`[${KILL_ATTR}]`);
+    if (kill instanceof HTMLElement) {
+      kill.removeAttribute('data-armed');
+      const label = kill.querySelector('[data-reticle-kill-label]');
+      if (label !== null) label.textContent = KILL_TEXT.LABEL;
+    }
     this.#root.setAttribute(SETTINGS_ATTR, '0');
     this.#panel?.setAttribute('aria-hidden', 'true');
     this.#btn?.setAttribute('data-active', '0');
