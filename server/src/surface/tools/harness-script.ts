@@ -24,6 +24,7 @@ import {
   type ModelDriver,
 } from '@/features/harness/harness.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
+import { noteHarnessGoal } from '@/judgement/runs/drive-run.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { leasableAppUrl } from '@/language/flows/flow-tools.js';
@@ -188,6 +189,9 @@ export async function exploreScript(
         maxSteps: Math.min(steps, maxSteps),
         focus: [planAsText(planFor(goal)), `Focus: ${goal}`].join('\n\n'),
       });
+      // Before the lane's session ends and is graded, so its run cannot read "Proved" over a goal
+      // the drive did not reach.
+      noteHarnessGoal(harness, result.goalMet);
       await bankOpenRecording(toolset, result, persona);
       if (persona !== undefined) {
         const saved = reconcileFlows(ahead, await reads.flows.list(), result.toolCalls);
@@ -251,6 +255,8 @@ export async function exploreScript(
     proved: run.view.lanes.some((lane) =>
       lane.journeys.some((card) => ScriptStatus.PASSED === card.status),
     ),
+    // Unmet if any journey's goal was judged unmet; met only when every judged one was.
+    ...goalOfRun(run.drives),
   };
   const reconciled = reconcileFlows(before, await reads.flows.list(), run.toolCalls);
   const unverifiedFlows = await flowsThatCheckNothing(reads, [
@@ -330,4 +336,10 @@ async function savePlan(
   } catch {
     return file;
   }
+}
+
+/** The run's goal verdict: false if any drive missed its goal, true if all judged ones reached it. */
+function goalOfRun(drives: readonly HarnessResult[]): { goalMet?: boolean } {
+  const judged = drives.flatMap((d) => (d.goalMet === undefined ? [] : [d.goalMet]));
+  return 0 === judged.length ? {} : { goalMet: judged.every(Boolean) };
 }

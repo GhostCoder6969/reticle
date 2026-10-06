@@ -12,7 +12,13 @@ import {
   buildVerificationRun,
   type VerificationRunInput,
 } from './artifact/build-verification-run.js';
-import { driveRunFrom, driveRunId, driveRunsFrom, harnessAgentId } from './drive-run.js';
+import {
+  driveRunFrom,
+  driveRunId,
+  driveRunsFrom,
+  harnessAgentId,
+  noteHarnessGoal,
+} from './drive-run.js';
 import { computeVerdict } from './artifact/build-verification-run.js';
 import { VerdictStatus } from '@reticlehq/core';
 
@@ -194,6 +200,20 @@ describe('a Harness drive in the same tab', () => {
     expect(drive?.agent.id).toBe(harnessAgentId('server'));
     expect(drive?.flows).toEqual([{ name: by.persona, status: 'fail', steps: 2, durationMs: 30 }]);
     expect(drive?.checks).toHaveLength(2);
+  });
+
+  /** A drive that saw "Invalid email or password" and never reached its goal synced as "Proved". */
+  it('fails when the drive did not reach its goal, though every check held', () => {
+    const missed = { ...by, harness: 'h-goal' };
+    noteHarnessGoal('h-goal', false);
+    const runs = driveRunsFrom(
+      [
+        { ...harness(Verified.YES, 40), drivenBy: missed },
+        { ...harness(Verified.YES, 70), drivenBy: missed },
+      ],
+      DEPS,
+    );
+    expect(runs.find((run) => 'harness-h-goal' === run.runId)?.flows[0]?.status).toBe('fail');
   });
 
   it('leaves a session the Harness never touched exactly one run', () => {

@@ -182,6 +182,27 @@ export function harnessAgentId(driver: string): string {
 /** The journey a Harness drive was named for, or what it did when nobody named one. */
 const UNNAMED_JOURNEY = 'Harness drive';
 
+/** Goal verdicts kept for the drives a session has not yet been graded on. */
+const MAX_GOALS_HELD = 200;
+const goalsMissed = new Map<string, boolean>();
+
+/**
+ * What the Harness judged of a drive's goal, noted the moment the drive finishes, before its
+ * session ends and is graded. A drive whose checks held but whose goal was not reached synced as
+ * "Proved" while the drive itself said it had failed. Unmet once is unmet: a later journey of the
+ * same drive reaching its goal does not undo it.
+ */
+export function noteHarnessGoal(harness: string, met: boolean | undefined): void {
+  if (met === undefined) return;
+  const before = goalsMissed.get(harness);
+  if (false === before) return;
+  if (MAX_GOALS_HELD <= goalsMissed.size && !goalsMissed.has(harness)) {
+    const oldest = goalsMissed.keys().next().value;
+    if (oldest !== undefined) goalsMissed.delete(oldest);
+  }
+  goalsMissed.set(harness, met);
+}
+
 /**
  * One Harness drive, as its own run: named for the journey it was asked to complete, and credited to
  * the Harness rather than to the agent whose tab it shared. The journey reads as one flow, failed
@@ -199,11 +220,12 @@ function harnessRunFrom(
   });
   if (input === undefined) return undefined;
   const statuses = input.checks.map((check) => check.status);
-  const status = statuses.includes(Verified.NO)
-    ? RunFlowStatus.FAIL
-    : statuses.includes(Verified.YES)
-      ? RunFlowStatus.PASS
-      : RunFlowStatus.SKIPPED;
+  const status =
+    statuses.includes(Verified.NO) || false === goalsMissed.get(by.harness)
+      ? RunFlowStatus.FAIL
+      : statuses.includes(Verified.YES)
+        ? RunFlowStatus.PASS
+        : RunFlowStatus.SKIPPED;
   const first = actions.reduce((min, action) => Math.min(min, action.at), Number.MAX_SAFE_INTEGER);
   return {
     ...input,

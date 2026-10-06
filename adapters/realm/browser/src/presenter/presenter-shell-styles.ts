@@ -62,9 +62,9 @@ export const SHELL_CSS = `
   overflow:visible;max-width:calc(100vw - 24px);font-family:var(--reticle-font);-webkit-font-smoothing:antialiased;
   /* ONE width for the chat, the capsule and the toolbar: the dock-width token. Two widths made the
      toolbar overhang the panel it belongs to, and the pair read as two unrelated widgets. */
-  --reticle-dock-w:var(--reticle-hud-dock-width,400px);
+  --reticle-dock-w:var(--reticle-hud-dock-width,320px);
   /* The log is the reason the panel exists, so it gets the height rather than the chrome. */
-  --reticle-chat-h:var(--reticle-hud-panel-height,680px);
+  --reticle-chat-h:var(--reticle-hud-panel-height,440px);
   opacity:0;transform:translate3d(0,8px,0);transition:opacity var(--reticle-shell-fast),transform var(--reticle-shell-fast);}
 [${DOCK_ATTR}][data-dragged="1"]{left:var(--reticle-hud-x);top:var(--reticle-hud-y);bottom:auto;right:auto;transform:none;}
 [${DOCK_ATTR}][data-dragged="1"][data-on="1"]{transform:none;}
@@ -424,6 +424,6 @@ export const SHELL_CSS = `
   --reticle-accent:var(--reticle-state);
   --reticle-accent-soft:color-mix(in srgb,var(--reticle-state) 18%,transparent);}
 @media (max-width:480px){
-  [${CHAT_PANEL}]{width:min(100vw - 24px,400px);max-height:min(620px,calc(100vh - 100px));}
+  [${CHAT_PANEL}]{width:min(100vw - 24px,320px);max-height:min(440px,calc(100vh - 100px));}
   [${OVERLAY}][${MIN_ATTR}="0"] [${HUD}]{max-width:calc(100vw - 24px);}
 }`;

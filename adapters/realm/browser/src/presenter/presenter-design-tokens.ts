@@ -21,8 +21,9 @@ export const PRESENTER_DESIGN_TOKENS_CSS = `
   --reticle-hud-icon-size:18px;
   --reticle-hud-control-size:36px;
   --reticle-hud-control-gap:4px;
-  --reticle-hud-dock-width:400px;
-  --reticle-hud-panel-height:560px;
+  /* Compact: the HUD sits over the user's own app. 400×560 covered too much of it. */
+  --reticle-hud-dock-width:320px;
+  --reticle-hud-panel-height:440px;
   --reticle-hud-ground:#0b0b0c;
   --reticle-hud-surface:#151417;
   --reticle-hud-inset:#232227;

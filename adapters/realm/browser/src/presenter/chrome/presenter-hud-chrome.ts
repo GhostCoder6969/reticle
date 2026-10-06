@@ -58,7 +58,7 @@ export const HUD_LOG_WELL_CSS: string = `
      as tall as its rows, which left the empty-state line floating near the top of an otherwise
      empty panel instead of centred in it. */
   position:relative;display:flex;flex-direction:column;
-  flex:1 1 auto;height:300px;min-height:120px;max-height:360px;overflow:hidden;
+  flex:1 1 auto;height:240px;min-height:120px;max-height:300px;overflow:hidden;
   contain:layout style paint;
   margin:0 6px;border-radius:12px;background:transparent;}
 .${HUD_LOG_WELL_CLASS} > *{position:relative;z-index:1;}`;
