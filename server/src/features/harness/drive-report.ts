@@ -280,17 +280,30 @@ export function checkTally(toolCalls: readonly ToolOutcome[]): {
   failed: number;
   undecided: number;
 } {
-  const tally = { held: 0, failed: 0, undecided: 0 };
+  // One check per control and claim, at its worst: a live drive pressed "Sign in" fifteen times and
+  // reported "15 of 15 check(s) held" for one fact proved fifteen times over.
+  const worst = new Map<string, 'held' | 'failed' | 'undecided'>();
   for (const call of toolCalls) {
+    const args = asRecord(call.args);
     const isCheck =
       ReticleTool.ASSERT === call.name ||
-      (ReticleTool.ACT_AND_WAIT === call.name && asRecord(call.args)['until'] !== undefined);
+      (ReticleTool.ACT_AND_WAIT === call.name && args['until'] !== undefined);
     if (!isCheck || call.isError) continue;
-    const verified = asString(asRecord(call.result)['verified']);
-    if (Verified.YES === verified) tally.held += 1;
-    else if (Verified.NO === verified) tally.failed += 1;
-    else tally.undecided += 1;
+    const result = asRecord(call.result);
+    const effect = asRecord(result['effect']);
+    const control =
+      asString(effect['testid']) ??
+      `${asString(effect['role']) ?? ''} ${asString(effect['name']) ?? asString(args['ref']) ?? ''}`;
+    const key = `${call.name}|${control}|${JSON.stringify(args['until'] ?? args['predicate'] ?? null)}`;
+    const verified = asString(result['verified']);
+    const now =
+      Verified.YES === verified ? 'held' : Verified.NO === verified ? 'failed' : 'undecided';
+    const before = worst.get(key);
+    if (before === undefined || 'failed' === now || ('undecided' === now && 'held' === before))
+      worst.set(key, now);
   }
+  const tally = { held: 0, failed: 0, undecided: 0 };
+  for (const verdict of worst.values()) tally[verdict] += 1;
   return tally;
 }
 

@@ -40,6 +40,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ### Fixed
 
+- **`@reticlehq/server`: a check repeated is counted once.** A live Harness drive pressed "Sign in" fifteen times and reported "PROVED — 15 of 15 check(s) held" without ever opening the sections it was asked to. The same claim on the same control now counts once, at its worst result, and the platform no longer offers a control a third time in one drive.
 - **`@reticlehq/server`: the Harness confirms a destructive action only when the journey asks for it.** Driving a whole app with no journey named, it confirmed eight destructive actions nobody asked for. A destructive control is now confirmed only when the journey names it (a refund journey may confirm "Refund now"), and is otherwise left alone.
 - **`@reticlehq/server`: a goal the Harness drives without a persona names its flows after the goal**, as a persona's do, instead of after the page alone.
 - **Docs: the skills no longer offer your own `ANTHROPIC_API_KEY` for the Harness.** It runs on the Reticle platform, and every plan includes it.

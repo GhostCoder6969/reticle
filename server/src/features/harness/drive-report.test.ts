@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeDrive, drivenSteps } from './drive-report.js';
+import { checkTally, describeDrive, drivenSteps } from './drive-report.js';
 import type { ToolOutcome } from './harness.js';
 
 /**
@@ -433,5 +433,28 @@ describe('the pages a drive reached', () => {
     );
     expect(summary).toContain('Reached 2 page(s): / → /#/settings.');
     expect(summary).not.toContain('__reticle_');
+  });
+});
+
+/** A false green from a live drive: one "Sign in" pressed fifteen times read as fifteen proofs. */
+describe('the same check made again', () => {
+  it('counts once, at its worst', () => {
+    const press = (verified: string) => ({
+      id: 'x',
+      name: 'reticle_act_and_wait',
+      args: { ref: 'e3', action: 'click', until: { kind: 'net', method: 'POST' } },
+      result: { verified, effect: { role: 'button', name: 'Sign in' } },
+      isError: false,
+    });
+    expect(checkTally(Array.from({ length: 15 }, () => press('yes')))).toEqual({
+      held: 1,
+      failed: 0,
+      undecided: 0,
+    });
+    expect(checkTally([press('yes'), press('no'), press('yes')])).toEqual({
+      held: 0,
+      failed: 1,
+      undecided: 0,
+    });
   });
 });
