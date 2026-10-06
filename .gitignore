@@ -166,3 +166,4 @@ scripts/.local-registry/
 # Local product-smoke evidence; uploaded by CI.
 /artifacts/smoke/
 /artifacts/install-packages/
+/artifacts/install-sandbox/

@@ -1,7 +1,10 @@
 /**
  * The user's request, relayed by the agent, kept with the runs that verify it: classified,
- * attributed, redacted, and local unless the project opts in.
+ * attributed, redacted, and shared from a linked project unless it opts out.
  */
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PromptContextSchema, StatementSource } from '@reticlehq/core/artifacts';
 import { createMemoryFs } from '@/memory/project/memory-fs.js';
@@ -68,5 +71,28 @@ describe('the request behind a verification', () => {
     };
     expect(soon.context?.request).toBe('Add reorder');
     expect(later.context).toBeUndefined();
+  });
+});
+
+describe('who the request is shared with', () => {
+  const declare = async (projectConfig?: object) => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-share-'));
+    const root = join(dir, '.reticle');
+    mkdirSync(root);
+    writeFileSync(join(root, 'cloud.json'), '{"projectId":"p"}');
+    if (projectConfig !== undefined)
+      writeFileSync(join(dir, '.reticle.json'), JSON.stringify(projectConfig));
+    const { d, fs } = deps(1_000);
+    (d as { reticleRoot: string }).reticleRoot = root;
+    await intentTool?.handler(d, { action: 'declare', request: 'Refund a payment' });
+    return PromptContextSchema.parse(JSON.parse(await fs.readFile(reticleDirPaths(root).request)));
+  };
+
+  it('goes to the platform from a linked project by default', async () => {
+    expect((await declare()).shared).toBe(true);
+  });
+
+  it('stays on this machine when the project says shareRequests: false', async () => {
+    expect((await declare({ shareRequests: false })).shared).toBe(false);
   });
 });

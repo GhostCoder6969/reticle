@@ -41,6 +41,7 @@
     "conformance:desktop": "node conformance/run-desktop.mjs",
     "gate:conformance": "node conformance/run-self.mjs --gate && node conformance/run-desktop.mjs --gate && node conformance/run-cli.mjs --gate",
     "gate:install": "node apps/e2e/install-gate.mjs",
+    "gate:install-sandbox": "node apps/e2e/install-sandbox.mjs",
     "gate:install:self-test": "node apps/e2e/install-gate.mjs --self-test",
     "gate:multi": "node apps/e2e/multi/multi-agent-sim.mjs",
     "gate:multi:self-test": "node apps/e2e/multi/multi-agent-sim.mjs --self-test",

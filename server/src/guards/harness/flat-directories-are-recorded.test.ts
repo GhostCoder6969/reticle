@@ -200,7 +200,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // call it rather than in a `text/` directory holding one file.
   // 39 with `query-hint-schema.ts`: tools.ts is at its line cap, and the one hint field that
   // overflowed it is declared beside it rather than squeezed out of its own description.
-  'server/src/surface/tools': 41,
+  // 42 with `next-step.ts`: the one line every tool result carries about what to do next. It is
+  // read where the envelope is assembled, in `invoke-tool.ts`, beside the other envelope sources.
+  'server/src/surface/tools': 42,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

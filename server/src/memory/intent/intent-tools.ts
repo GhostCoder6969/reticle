@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import {
@@ -12,7 +12,7 @@ import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { IntentStore } from './intent-store.js';
 import { IntentShardStore } from './intent-shard-store.js';
 import { IntentStatus } from './intent-shard.js';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleDir, ReticleTool, apiKeyFrom } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { PredicateSchema } from '@reticlehq/engine/question/predicate/predicate.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
@@ -203,9 +203,9 @@ export const INTENT_TOOLS: ToolDef[] = [
   },
 ];
 
-const MAX_REQUEST = 4000;
+const MAX_REQUEST = 20_000;
 const MAX_STATEMENT = 500;
-const MAX_STATEMENTS = 50;
+const MAX_STATEMENTS = 100;
 const PROJECT_CONFIG = '.reticle.json';
 
 /** Credentials and personal data out, length capped: the same rules feedback reports follow. */
@@ -213,21 +213,35 @@ function redactSecrets(text: string, max: number): string {
   return redactFeedbackText(text, max).text;
 }
 
-/** Whether the project opted in to keeping requests on the platform: `"shareRequests": true`. */
-function sharesRequests(projectDir: string): boolean {
+/**
+ * Whether the request goes to the platform with the runs that verify it.
+ *
+ * A LINKED project shares it unless `.reticle.json` says `"shareRequests": false`: the platform
+ * reads what each run was for, which is half of what a run means. An unlinked project has nowhere
+ * to send it, and `"shareRequests": true` still shares from one that links later.
+ */
+function sharesRequests(projectDir: string, reticleRoot: string): boolean {
+  let setting: unknown;
   try {
     const config: unknown = JSON.parse(readFileSync(join(projectDir, PROJECT_CONFIG), 'utf8'));
-    return true === (config as { shareRequests?: unknown } | null)?.shareRequests;
+    setting = (config as { shareRequests?: unknown } | null)?.shareRequests;
   } catch {
-    return false;
+    setting = undefined;
   }
+  if (false === setting) return false;
+  if (true === setting) return true;
+  // Linked by `reticle connect` (cloud.json), or by a key in the environment, the way CI syncs.
+  return (
+    existsSync(join(reticleRoot, ReticleDir.CLOUD_LINK_FILE)) ||
+    apiKeyFrom(process.env) !== undefined
+  );
 }
 
 /**
  * Keep the user's request, and every statement in it and in the declared intents, classified and
  * attributed, for the runs that verify it. Secrets are redacted before anything is written.
  *
- * Shared with the platform only when the project says so: `"shareRequests": true` in .reticle.json.
+ * Shared with the platform from a linked project unless `.reticle.json` says `"shareRequests": false`.
  */
 async function recordRequest(
   deps: ToolDeps,
@@ -256,7 +270,7 @@ async function recordRequest(
         kind: classifyStatement(s.text),
       })),
     at: deps.now(),
-    shared: sharesRequests(dirname(root)),
+    shared: sharesRequests(dirname(root), root),
   };
   const path = reticleDirPaths(root).request;
   await deps.fs.mkdir(dirname(path));

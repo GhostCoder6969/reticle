@@ -270,6 +270,8 @@ export const EnvelopeKey = {
   FEEDBACK_UNDELIVERED: 'feedback_undelivered',
   /** Once per project: verified runs exist only on this machine. See platform-moment.ts. */
   PLATFORM: 'platform',
+  /** The one thing to do next: declare the request, yield, fix sync, connect. See next-step.ts. */
+  NEXT: 'next',
 } as const;
 export type EnvelopeKey = (typeof EnvelopeKey)[keyof typeof EnvelopeKey];
 

@@ -63,18 +63,17 @@ check_node() {
   Linux   https://nodejs.org/en/download/package-manager
   any     https://github.com/nvm-sh/nvm
 
-Reticle does not install a runtime for you. A piped script that puts a language toolchain on your
-machine without asking is not something you should run, from us or from anybody."
+Install Node, then run the same command again. Reticle does not install a runtime for you: a piped script that puts a language toolchain on your machine without asking is not something you should run, from us or from anybody."
   }
   major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
   minor="$(node -p 'process.versions.node.split(".")[1]' 2>/dev/null || echo 0)"
   [ "$major" -ge "$NODE_MIN_MAJOR" ] || {
     note_failure runtime_ready node_too_old
-    die "Node $major is too old -- Reticle needs $NODE_MIN_MAJOR.$NODE_MIN_MINOR or newer."
+    die "Node $major is too old -- Reticle needs $NODE_MIN_MAJOR.$NODE_MIN_MINOR or newer. Install a newer one (nodejs.org, or 'nvm install 22'), then run the same command again."
   }
   if [ "$major" -eq "$NODE_MIN_MAJOR" ] && [ "$minor" -lt "$NODE_MIN_MINOR" ]; then
     note_failure runtime_ready node_too_old
-    die "Node $major.$minor is too old -- Reticle needs $NODE_MIN_MAJOR.$NODE_MIN_MINOR or newer."
+    die "Node $major.$minor is too old -- Reticle needs $NODE_MIN_MAJOR.$NODE_MIN_MINOR or newer. Install a newer one (nodejs.org, or 'nvm install 22'), then run the same command again."
   fi
 }
 
@@ -169,11 +168,11 @@ main() {
   say ""
   if [ -t 1 ]; then
     say "Done. Open your coding agent in your app's folder and ask:"
-    say "  \"Set up Reticle and verify one flow.\""
+    say "  \"Verify one flow in my running app with Reticle.\""
     say "Agent already open? Restart it once so it loads Reticle's tools."
   else
-    say "Done. Next, in the user's app folder: 'reticle init' wires the app and proves it"
-    say "connects. The reticle_* tools load when this agent session restarts."
+    say "Done. Next, in the user's app folder: 'reticle init' wires the app and proves it connects."
+    say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
   fi
 }
 

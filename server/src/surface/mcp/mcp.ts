@@ -15,7 +15,7 @@ import {
 import { ReticleTool } from '@reticlehq/core';
 import { SHARED_PARAM_SHORT } from './shared-params.js';
 import { buildDynamicTools } from '@/surface/tools/dynamic-tools.js';
-import { runTool, SESSION_BOUND_TOOLS } from '@/surface/tools/invoke-tool.js';
+import { runTool } from '@/surface/tools/invoke-tool.js';
 import { sessionEnvelopeShape, newSnapshotCache } from '@/surface/tools/tool-kit.js';
 import { buildErrorPayload } from '@/surface/tools/error-recovery.js';
 import { takeVersionSkewOnto } from '@/command/version/version-nudge.js';
@@ -49,16 +49,20 @@ import { reportMcpConnected } from '@/telemetry/mcp-connection.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 
 /**
- * Merge the runtime-spliced envelope (health/lease/age/control) into a session-bound tool's declared
- * outputSchema so structuredContent validation keeps those fields instead of dropping them. The tool's
- * own keys win over the permissive envelope defaults (e.g. ACT keeps its typed `session` shape).
- * Non-session-bound tools (and tools with no outputSchema) are returned unchanged.
+ * Merge the runtime-spliced envelope into a tool's declared outputSchema so structuredContent
+ * validation keeps those fields instead of rejecting the call. The tool's own keys win over the
+ * permissive envelope defaults (e.g. ACT keeps its typed `session` shape).
+ *
+ * EVERY tool with an output schema, not only the session-bound ones: `runTool` adds `next`,
+ * `update_available`, `version_skew` and the feedback keys to any tool's result, and a session-exempt
+ * tool with a strict schema (`reticle_context`) failed the whole call on a validating client the
+ * first time one of them rode on it.
  */
 export function withSessionEnvelope(
-  name: string,
+  _name: string,
   outputSchema: z.ZodRawShape | undefined,
 ): z.ZodRawShape | undefined {
-  if (outputSchema === undefined || !SESSION_BOUND_TOOLS.has(name)) return outputSchema;
+  if (outputSchema === undefined) return outputSchema;
   return { ...sessionEnvelopeShape, ...outputSchema };
 }
 

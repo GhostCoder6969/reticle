@@ -18,6 +18,18 @@ describe('the prompt context of a verification', () => {
     expect(classifyStatement('I prefer the darker header')).toBe(StatementKind.PREFERENCE);
   });
 
+  it('tells the other kinds a prompt carries apart, too', () => {
+    const cases: [string, StatementKind][] = [
+      ['Refactor the refund hook into its own module', StatementKind.CODING_INTENT],
+      ['Fix the bug where the total is off by a cent', StatementKind.CODING_INTENT],
+      ['The table should stay usable on mobile', StatementKind.UX_EXPECTATION],
+      ['Only admins can issue a refund', StatementKind.SECURITY],
+      ["Don't touch the settlements page", StatementKind.OUT_OF_SCOPE],
+      ['Merchants get their money back the same day', StatementKind.BUSINESS_INTENT],
+    ];
+    for (const [text, kind] of cases) expect(classifyStatement(text), text).toBe(kind);
+  });
+
   it('splits a request into its sentences', () => {
     expect(splitStatements('Add reorder. It must keep the size!\nKeep it fast')).toEqual([
       'Add reorder.',

@@ -288,7 +288,11 @@ describe('advertised surface cost', () => {
 // 145,684 B, inside 146_000.
 // 146_000 -> 146_400 for `push` on reticle_project and the query hint field (#1395): 146,174 B.
 // 146_400 -> 146_600 for `hud` on reticle_session tune and its `hud` result.
-const ALL_SURFACE_BYTE_BUDGET = 146_600;
+// 146_600 -> 149_200: the result envelope is declared on EVERY tool with an output schema, not only
+// session-bound ones (149,138 B measured). runTool adds `next` and the one-shot keys to any result,
+// and a strict session-exempt schema rejected the call outright. The default surface sends no
+// output schemas, so this costs nothing there.
+const ALL_SURFACE_BYTE_BUDGET = 149_200;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

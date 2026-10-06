@@ -39,7 +39,7 @@ Once linked, you choose what syncs:
 npx @reticlehq/server config --runs on|off --flows on|off --memory on|off
 ```
 
-`--memory` covers the coverage ledger and the HUD notes as well, and the notes are the words people typed. The user's request (`request.json`) never syncs unless `.reticle.json` sets `"shareRequests": true`; it is kept out of git too.
+`--memory` covers the coverage ledger and the HUD notes as well, and the notes are the words people typed. The user's request (`request.json`, the prompt the agent relayed, redacted) goes to the platform with the runs from a linked project, so the dashboard can show what each run was for; `"shareRequests": false` in `.reticle.json` keeps it on the machine. An unlinked project sends it nowhere, and it is kept out of git either way.
 
 When the Harness drives through the platform (`driver: "server"`) or a model provider you configured, that service sees what it drives: each step's result goes to it so it can choose the next one.
 
@@ -53,7 +53,7 @@ DO_NOT_TRACK=1               # the convention, honoured
 npx @reticlehq/server telemetry disable   # this machine, permanently
 ```
 
-Telemetry carries no free text. Free text leaves in three ways, each one something you chose: a feedback report (never collected passively; `RETICLE_FEEDBACK=0` disables it), HUD notes on a linked project with `--memory on`, and the user's request with `shareRequests`.
+Telemetry carries no free text. Free text leaves in three ways, each one something you chose: a feedback report (never collected passively; `RETICLE_FEEDBACK=0` disables it), HUD notes on a linked project with `--memory on`, and the user's request from a linked project unless `"shareRequests": false`.
 
 The daemon also fetches a small public file, `https://reticle.sh/hud/notices.v1.json`, for the notices in the HUD's rail. The request carries nothing about you or your project. `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` stops it, and `RETICLE_HUD_NOTICES_URL` points it elsewhere.
 

@@ -1,4 +1,6 @@
 import { healthEnvelope } from '@/portal/session/session-health.js';
+import { nextStep } from './next-step.js';
+import { currentDrivenBy } from '@/hooks/driven-by.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
 import { takePlatformMoment } from './platform-moment.js';
 import { verifyNextBaton, SUPPRESS_VERIFY_NEXT_ENV } from './verify-next-baton.js';
@@ -657,15 +659,31 @@ export async function runTool<Ext>(
   const platform = isPlainObject(raw)
     ? await takePlatformMoment(deps, raw, () => sessionRoot(deps, rawSessionId))
     : undefined;
+  // What the agent should do next, on every client that reads results. Not for the Harness, whose
+  // runs the daemon syncs itself and which cannot relay the user's words, and not on `reticle_run`'s
+  // outer result: the inner call already carried one.
+  const next =
+    isPlainObject(raw) && ReticleTool.RUN !== tool.name && currentDrivenBy() === undefined
+      ? nextStep({
+          tool: tool.name,
+          verdict: 'verified' in raw,
+          root: safeRoot(() => sessionRoot(deps, rawSessionId)),
+          // A partial deps (tests, the demo) may carry no clock; the line is advice, never a reason to fail.
+          now: 'function' === typeof deps.now ? deps.now() : Date.now(),
+        })
+      : undefined;
   const result =
     prompt === undefined &&
     update === undefined &&
     skew === undefined &&
     undelivered === undefined &&
     friction === undefined &&
-    platform === undefined
+    platform === undefined &&
+    next === undefined
       ? raw
       : {
+          // First, so a model that truncates a long result still reads it.
+          ...(next !== undefined ? { [EnvelopeKey.NEXT]: next } : {}),
           ...(raw as object),
           ...(friction !== undefined
             ? {
@@ -736,4 +754,13 @@ export async function runTool<Ext>(
       resolved.lastAct?.effect() ?? {},
     );
   return Object.keys(envelope).length > 0 ? { ...result, ...envelope } : result;
+}
+
+/** A root, or undefined when none can be resolved: a missing root is never a reason to throw. */
+function safeRoot(get: () => string): string | undefined {
+  try {
+    return get();
+  } catch {
+    return undefined;
+  }
 }

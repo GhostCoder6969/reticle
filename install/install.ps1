@@ -70,8 +70,7 @@ function Check-Node {
       '  winget  winget install OpenJS.NodeJS.LTS',
       '  any     https://nodejs.org/en/download',
       '',
-      'Reticle does not install a runtime for you. A piped script that puts a language toolchain on',
-      'your machine without asking is not something you should run, from us or from anybody.'
+      'Install Node, then run the same command again. Reticle does not install a runtime for you: a piped script that puts a language toolchain on your machine without asking is not something you should run, from us or from anybody.'
     )
   }
   # `node -v` and split HERE, rather than `node -p 'process.versions.node.split(".")[0]'`.
@@ -90,7 +89,7 @@ function Check-Node {
   } catch { $major = 0; $minor = 0 }
   if (($major -lt $NodeMinMajor) -or (($major -eq $NodeMinMajor) -and ($minor -lt $NodeMinMinor))) {
     Note-Failure 'runtime_ready' 'node_too_old'
-    Die @("Node $major.$minor is too old -- Reticle needs $NodeMinMajor.$NodeMinMinor or newer.")
+    Die @("Node $major.$minor is too old -- Reticle needs $NodeMinMajor.$NodeMinMinor or newer. Install a newer one (winget install OpenJS.NodeJS.LTS, or nodejs.org), then run the same command again.")
   }
 }
 
@@ -174,11 +173,11 @@ function Main {
   Say ''
   if (-not [Console]::IsOutputRedirected) {
     Say "Done. Open your coding agent in your app's folder and ask:"
-    Say '  "Set up Reticle and verify one flow."'
+    Say '  "Verify one flow in my running app with Reticle."'
     Say "Agent already open? Restart it once so it loads Reticle's tools."
   } else {
-    Say "Done. Next, in the user's app folder: 'reticle init' wires the app and proves it"
-    Say 'connects. The reticle_* tools load when this agent session restarts.'
+    Say "Done. Next, in the user's app folder: 'reticle init' wires the app and proves it connects."
+    Say "The reticle_* tools load when this agent session restarts. Cannot restart yourself? 'reticle init --relaunch' prints the command that resumes this conversation with the tools loaded."
   }
   exit 0
 }
