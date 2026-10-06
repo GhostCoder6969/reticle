@@ -12,7 +12,13 @@ interface Call {
 
 /** Ports over a fake app: `failing` flows replay red, `absent` predicates do not hold. */
 function fakePorts(
-  options: { failing?: string[]; absent?: string[]; parallel?: number; checks?: string } = {},
+  options: {
+    failing?: string[];
+    absent?: string[];
+    parallel?: number;
+    checks?: string;
+    goalMet?: boolean;
+  } = {},
 ) {
   const calls: Call[] = [];
   let live = 0;
@@ -73,6 +79,7 @@ function fakePorts(
         ],
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         proved: true,
+        ...(options.goalMet === undefined ? {} : { goalMet: options.goalMet }),
       });
     },
   };
@@ -223,5 +230,29 @@ describe('an open journey', () => {
       fake.ports,
     );
     expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+  });
+});
+
+/** From a live drive: "open each section" passed on two presses of Sign in, its checks holding. */
+describe('an open journey whose goal was not reached', () => {
+  it('fails, and says the goal is what was missing', async () => {
+    const fake = fakePorts({ goalMet: false });
+    const run = await runScript(
+      script({
+        version: 1,
+        source: 'platform',
+        journeys: [
+          {
+            id: 'nav',
+            title: 'Open each section',
+            steps: [{ kind: 'act', goal: 'open each section' }],
+          },
+        ],
+        lanes: [{ id: 'A', journeys: ['nav'] }],
+      }),
+      fake.ports,
+    );
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.FAILED);
+    expect(run.lines[0]).toContain('the goal was not reached');
   });
 });

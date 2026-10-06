@@ -134,6 +134,17 @@ export interface HarnessResult {
    * that did not error. A drive without one clicked things and proved nothing.
    */
   proved: boolean;
+  /**
+   * Whether the drive reached its whole goal, as the platform judged when it finished. Checks that
+   * held are not the goal reached: "open each section" passed on two presses of Sign in.
+   */
+  goalMet?: boolean;
+}
+
+/** The finish's judgement of the goal, when it carried one. */
+function goalMetOf(args: Record<string, unknown>): { goalMet?: boolean } {
+  const met = args['goalMet'];
+  return 'boolean' === typeof met ? { goalMet: met } : {};
 }
 
 /**
@@ -330,6 +341,7 @@ export async function runHarness(
           toolCalls,
           usage,
           proved: true,
+          ...goalMetOf(finish.args),
         };
       }
       askedToProve = true;
@@ -352,6 +364,7 @@ export async function runHarness(
         toolCalls,
         usage,
         proved: proved(),
+        ...goalMetOf(finish.args),
       };
     }
 

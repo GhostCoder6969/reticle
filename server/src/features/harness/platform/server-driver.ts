@@ -57,6 +57,7 @@ interface TurnReply {
   done: boolean;
   status: string;
   summary?: string;
+  goalMet?: boolean;
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number };
 }
 
@@ -156,7 +157,10 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
             {
               id: `server-finish-${String(reply.turn)}`,
               name: FINISH,
-              args: { summary: reply.summary ?? reply.text },
+              args: {
+                summary: reply.summary ?? reply.text,
+                ...('boolean' === typeof reply.goalMet ? { goalMet: reply.goalMet } : {}),
+              },
             },
           ],
         };

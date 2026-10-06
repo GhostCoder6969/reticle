@@ -58,6 +58,9 @@ export interface ScriptRun {
   lines: string[];
 }
 
+/** Why a journey failed when its goal, not a check, is what was missing. */
+const GOAL_NOT_REACHED = 'the goal was not reached, though its checks may have held';
+
 /** A planned open journey gets the same budget a named persona drive gets. */
 const OPEN_GOAL_STEPS = DEFAULT_MAX_STEPS;
 
@@ -92,6 +95,8 @@ export async function runScript(
   }
 
   const journeyById = new Map(script.journeys.map((j) => [j.id, j]));
+  /** Journeys whose checks may have held but whose goal the drive did not reach. */
+  const goalMissed = new Set<object>();
   const broken = new Map<string, string>();
   tell();
 
@@ -123,10 +128,13 @@ export async function runScript(
         const tools = recording(ports.toolset(lease.sessionId, journey.persona), toolCalls);
         card.status = ScriptStatus.RUNNING;
         tell();
+        const drivesBefore = drives.length;
         const ok = await runJourney(journey, card.steps, tools, ports, drives, tell, () => {
           stopped = true;
         });
         card.status = ok ? ScriptStatus.PASSED : ScriptStatus.FAILED;
+        if (!ok && drives.slice(drivesBefore).some((d) => false === d.goalMet))
+          goalMissed.add(card);
         blocked = !ok;
         settleOwned(id, ok);
         tell();
@@ -158,7 +166,12 @@ export async function runScript(
 
   const lines = view.lanes.flatMap((lane) =>
     lane.journeys.map((card) => {
-      const why = ScriptStatus.BLOCKED === card.status ? broken.get(lane.id) : undefined;
+      const why =
+        ScriptStatus.BLOCKED === card.status
+          ? broken.get(lane.id)
+          : goalMissed.has(card)
+            ? GOAL_NOT_REACHED
+            : undefined;
       return `${mark(card.status)} ${lane.id} · ${card.title} — ${card.status}${why === undefined ? '' : ` (${why.slice(0, 160)})`}`;
     }),
   );
@@ -262,7 +275,8 @@ async function runLeaf(
         // Passed means its checks held, not that it ran one: a refund journey whose two checks both
         // failed was marked passed because a check had run.
         const tally = checkTally(drive.toolCalls);
-        return 0 < tally.held && 0 === tally.failed;
+        // Its checks holding is not its goal reached: a goal judged unmet does not pass.
+        return 0 < tally.held && 0 === tally.failed && false !== drive.goalMet;
       }
       const result = await call(tools, ReticleTool.ACT_AND_WAIT, {
         ...(step.target === undefined ? {} : { target: step.target }),
