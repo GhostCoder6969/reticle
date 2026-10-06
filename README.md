@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/inst
 
 Windows: `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`
 
-It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Verify one flow in my running app with Reticle."_ The first time it uses Reticle there, it wires the app itself and tells you every file it changed. No account needed, and nothing from your project leaves your machine.
+It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Verify one flow in my running app with Reticle."_ The first time it uses Reticle there, it wires the app itself (the same thing `reticle init` does) and tells you every file it changed. No account needed, and nothing from your project leaves your machine.
 
 <a id="manual-install"></a>
 <details>
