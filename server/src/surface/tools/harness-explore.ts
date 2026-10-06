@@ -10,6 +10,7 @@
 
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { proposePersonas, type Persona } from '@/features/harness/platform/personas.js';
+import { randomUUID } from 'node:crypto';
 import { ReticleEnv, ReticleTool, asProjectId, cloudUrlFrom, asRecord } from '@reticlehq/core';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -265,7 +266,16 @@ export async function exploreApp(
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
-  const toolset = reticleToolset(deps, pinned(options));
+  // Every action this drive takes carries who took it, so the run it folds into is the Harness's own
+  // and not mixed into the run of whichever agent shares the tab.
+  const toolset = reticleToolset(deps, {
+    ...pinned(options),
+    drivenBy: {
+      harness: randomUUID(),
+      driver: built.name,
+      ...(options.focus === undefined ? {} : { persona: options.focus }),
+    },
+  });
   const drive = await runHarness(driver, toolset, {
     maxSteps,
     // The plan rides in as standing instruction, so it is in front of the model on every turn

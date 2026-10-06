@@ -10,11 +10,12 @@
 
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, type DrivenBy } from '@reticlehq/core';
 import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 import { runTool } from './invoke-tool.js';
 import { TOOL_SURFACE, filterTools } from './tool-surface.js';
 import { withTimeout } from '@/features/harness/with-timeout.js';
+import { runDrivenBy } from '@/hooks/driven-by.js';
 import type { HarnessTool, HarnessToolset } from '@/features/harness/harness.js';
 
 /**
@@ -101,6 +102,8 @@ export interface ReticleToolsetOptions {
   sessionId?: string;
   /** Restrict to these names. Defaults to the advertised surface plus the recording pair. */
   only?: readonly string[];
+  /** Stamped on every action this drive journals, so its verdicts fold into a run of their own. */
+  drivenBy?: DrivenBy;
 }
 
 /**
@@ -141,8 +144,11 @@ export function reticleToolset(
         return { error: `unknown tool ${target ?? name}`, available: [...byName.keys()] };
       }
       const scoped = pinSession(targetArgs, options.sessionId);
+      const drivenBy = options.drivenBy;
       return withTimeout(
-        runTool(tool, deps, scoped),
+        drivenBy === undefined
+          ? runTool(tool, deps, scoped)
+          : runDrivenBy(drivenBy, () => runTool(tool, deps, scoped)),
         TOOL_TIMEOUT_MS,
         `${tool.name} never returned`,
       );
