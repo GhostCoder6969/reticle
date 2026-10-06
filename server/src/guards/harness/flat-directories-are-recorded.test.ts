@@ -282,7 +282,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `dir -> resolve` and `dir -> project`, turning a leaf directory into one that reaches for four
   // others. A flat file is cheaper than a new mutual pair. Group them when the address question
   // stops needing the caller's dependencies to answer it.
-  'server/src/memory/project': 11,
+  'server/src/memory/project': 12,
   // 11 when `memory-scope.ts` landed: which project a shared-memory READ is about, on the wire and
   // in the response. Recorded rather than grouped, for the sibling reason above it. Its natural
   // group would be `cloud/memory/`, and a directory named `memory` beside `server/src/memory` is a

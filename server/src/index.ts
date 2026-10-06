@@ -728,6 +728,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     firstRun: firstRunWiring({ port, cliPath: process.argv[1] ?? '' }),
     // A finished verification should not sit behind a one-minute timer — see ToolDeps.onRunPersisted.
     onRunPersisted: (): void => cloudSync.nudge(),
+    syncNow: () => cloudSync.syncNow(),
   };
   const profile = resolveToolSurface(options.toolProfile);
   const effectiveDeps = realInput !== undefined ? { ...deps, realInput } : deps;

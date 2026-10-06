@@ -72,6 +72,8 @@ export interface ToolDeps<Ext = unknown> {
    * it, so two agents on one origin never share a tab (#1226). Absent ⇒ every acquire gets its own.
    */
   attachId?: string;
+  /** Run one sync cycle with the platform now, for `reticle_project { push }`. Absent: not linked here. */
+  syncNow?: () => Promise<unknown>;
   /** Wires the app on the agent's first use, instead of at installation. Absent: tell, do not wire. */
   firstRun?: FirstRunWiring;
   /** cross-run outcome memory (.reticle/project.json). */
