@@ -86,10 +86,10 @@ It detects the framework and package manager, wires the build config, installs t
 **Then prove a flow. That is the FIRST RUN, and it is a separate call:**
 
 ```
-reticle_verify { action: "explore", persona: "<who does what>" }
+reticle_act_and_wait { ref, action, until }
 ```
 
-It drives the app with a model inside the daemon and RECORDS what it drove, so every later check replays that flow with no model in the loop.
+Drive the journey that matters and put the verdict on its LAST step: `until` names the end state before the action fires. What you drive is saved as a flow, so later runs replay it with no model. If a model is configured (your own `ANTHROPIC_API_KEY`, or a linked project on a plan or trial), `reticle_verify { action: "explore", persona: "<who does what>" }` drives the whole journey for you instead.
 
 ## What YOU decide, and pass in
 

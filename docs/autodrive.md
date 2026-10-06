@@ -46,8 +46,13 @@ Every journey a drive walks is saved, whatever happens to the drive, including o
 | `ANTHROPIC_API_KEY` | `anthropic`, which generates its calls as text. |
 | `OPENAI_API_KEY` | `openai`, the same, on OpenAI. |
 | `JEV_API_KEY` | `jev`, against TypeSafe directly, for anyone who holds their own key. |
+| `RETICLE_API_KEY` + `driver: "server"` | `server`, the platform's Harness: the platform holds the persona and every decision, turn by turn, and this daemon executes each step against your local app. Needs a plan or trial. |
 
-With several configured, `anthropic` is the default and `RETICLE_HARNESS_DRIVER` moves off it; with only a platform key, `jev` is not the cheaper option, it is the only one. Naming a driver that is not configured is an error, never a silent substitution.
+With several configured, `anthropic` is the default and `RETICLE_HARNESS_DRIVER` moves off it; with only a platform key, `jev` is the default unless the platform names `server` as the project's driver. Naming a driver that is not configured is an error, never a silent substitution.
+
+With `driver: "server"` and no `persona`, the platform proposes four or five people worth being for your app (a first-time visitor, a power user, a keyboard user, somebody careless) and drives each in turn. Any "double-quoted text" in a persona must be on the page when the journey ends, and is checked.
+
+**What you see.** The HUD's Agent Log marks the moment the Harness takes over ("Reticle Harness is driving") and gives its steps their own colour, so you can tell its work from your agent's. Each Harness drive is recorded as its own run, named for its journey and credited to the Harness, beside your agent's run.
 
 A driver can also be chosen per call, as `reticle_verify { action: "explore", driver: "jev" }`. The question people actually have is comparative, and answering it with an environment variable means restarting the daemon between arms.
 
@@ -73,7 +78,7 @@ What it writes is a FIXTURE, not an opinion. Generated values are saved to `.ret
 
 A project linked to a Reticle workspace reads two things from it before a drive starts, and honours both:
 
-- **The switch.** Autonomous driving can be turned off per project in the dashboard, under Settings → Verification model. A drive then refuses and says where to turn it back on. Everything else is unaffected, including the tools your own agent drives with.
+- **The switch.** Autonomous driving can be turned off per project, from the HUD's Reticle Harness switch or the dashboard (Settings → Verification model). A drive then refuses and says where to turn it back on. Switched off while a platform drive is running, the drive stops at its next turn with `stopReason: "stopped"`, keeps what it drove, and says so in the Agent Log. Everything else is unaffected, including the tools your own agent drives with.
 - **Who is paying.** Driving through the platform spends Reticle's model budget, which is free for three months once claimed and included on a paid plan. Outside both, a drive is refused with the claim link rather than run on somebody else's money.
 
 Neither applies to a drive on a model key of your own: that costs us nothing, so it is not ours to gate. A daemon that cannot reach the platform at all drives normally: an unreachable settings endpoint is not a reason to lose a feature you were never told to stop using.

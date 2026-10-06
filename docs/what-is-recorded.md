@@ -15,7 +15,7 @@ Everything lands in `.reticle/` in your project, and it is yours. Three kinds of
 | --- | --- | --- |
 | **runs** | a verdict and its evidence | what was claimed, whether it held, the request or state change that decided it, and the `file:line` of the element driven |
 | **flows** | a journey you drove, saved so it can be replayed | the steps, the anchors they resolve by, and the values that were typed |
-| **memory** | what this project has learned across sessions | intents you declared, envelopes of normal behaviour, notes about anchors that drift |
+| **memory** | what this project has learned across sessions | intents you declared, envelopes of normal behaviour, notes about anchors that drift, the coverage ledger (`coverage.json`), the notes people pinned in the HUD (`notes.json`), and the user's latest request as the agent relayed it (`request.json`, local only) |
 
 `.reticle/` splits into a part meant for git and a part meant to stay local. Flows are the part worth committing: a saved flow is a regression test. Evidence is the part that is not.
 
@@ -39,6 +39,10 @@ Once linked, you choose what syncs:
 npx @reticlehq/server config --runs on|off --flows on|off --memory on|off
 ```
 
+`--memory` covers the coverage ledger and the HUD notes as well, and the notes are the words people typed. The user's request (`request.json`) never syncs unless `.reticle.json` sets `"shareRequests": true`; it is kept out of git too.
+
+When the Harness drives through the platform (`driver: "server"`) or a model provider you configured, that service sees what it drives: each step's result goes to it so it can choose the next one.
+
 ## Telemetry, which is separate from all of the above
 
 The CLI sends anonymous usage events: event names and a random installation id. No code, no page content, no URLs from your app. It is how we know which parts of the product are reached at all.
@@ -49,7 +53,9 @@ DO_NOT_TRACK=1               # the convention, honoured
 npx @reticlehq/server telemetry disable   # this machine, permanently
 ```
 
-Feedback is the only free text that ever leaves, it is never collected passively, and `RETICLE_FEEDBACK=0` disables it.
+Telemetry carries no free text. Free text leaves in three ways, each one something you chose: a feedback report (never collected passively; `RETICLE_FEEDBACK=0` disables it), HUD notes on a linked project with `--memory on`, and the user's request with `shareRequests`.
+
+The daemon also fetches a small public file, `https://reticle.sh/hud/notices.v1.json`, for the notices in the HUD's rail. The request carries nothing about you or your project. `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` stops it, and `RETICLE_HUD_NOTICES_URL` points it elsewhere.
 
 ## What `init` writes to your project
 
