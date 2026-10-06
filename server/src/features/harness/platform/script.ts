@@ -53,10 +53,12 @@ const MAX_PERSONAS = 5;
 export function personasIn(flows: readonly FlowFile[]): { name: string; journey: string }[] {
   const seen = new Map<string, string>();
   for (const flow of flows) {
-    const at = (flow.intent ?? '').indexOf(':');
+    // The first line only: an older drive saved the product's rules below the journey.
+    const intent = (flow.intent ?? '').split('\n')[0] ?? '';
+    const at = intent.indexOf(':');
     if (at <= 0 || MAX_PERSONA_NAME < at) continue;
-    const name = (flow.intent ?? '').slice(0, at).trim();
-    const journey = (flow.intent ?? '').slice(at + 1).trim();
+    const name = intent.slice(0, at).trim();
+    const journey = intent.slice(at + 1).trim();
     if (0 < name.length && 0 < journey.length && !seen.has(name)) seen.set(name, journey);
   }
   return [...seen].slice(0, MAX_PERSONAS).map(([name, journey]) => ({ name, journey }));

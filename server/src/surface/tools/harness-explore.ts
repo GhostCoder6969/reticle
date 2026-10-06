@@ -329,7 +329,9 @@ export async function recordPersona(
   names: readonly string[],
   persona: string,
 ): Promise<void> {
-  const intent = persona.trim();
+  // Only the journey itself, "Name: journey": the plan appends the product's rules below it, and
+  // keeping them made each plan append them again to a goal that already carried them.
+  const intent = (persona.split('\n')[0] ?? '').trim();
   if (0 === intent.length) return;
   for (const name of names) {
     try {

@@ -77,11 +77,13 @@ describe('the personas a project already drove', () => {
       flow('Support agent: a second flow of the same person'),
       flow('Finance reconciler: exports captured payments'),
       flow('no colon here'),
+      flow('Ops: settles\n\nThe product rules for this journey: never twice'),
       flow(),
     ]);
     expect(personas).toEqual([
       { name: 'Support agent', journey: 'refunds a captured payment' },
       { name: 'Finance reconciler', journey: 'exports captured payments' },
+      { name: 'Ops', journey: 'settles' },
     ]);
     let sent: Record<string, unknown> = {};
     await proposeScript(
