@@ -270,9 +270,12 @@ describe('kill Reticle', () => {
     (document.querySelector('[data-reticle-settings-btn]') as HTMLElement).click();
     const kill = document.querySelector('[data-reticle-settings-kill]') as HTMLElement;
     const foot = document.querySelector('.reticle-settings-foot') as HTMLElement;
-    expect(foot.lastElementChild, 'Kill Reticle is the last option').toBe(kill);
+    const row = foot.lastElementChild;
+    expect(row?.contains(kill), 'Kill Reticle is the last option').toBe(true);
     expect(kill.textContent).toContain('Kill Reticle');
-    expect(kill.textContent).toContain('restart your dev server');
+    expect(row?.textContent, 'the warning sits under the button').toContain(
+      'restart your dev server',
+    );
     kill.click();
     expect(killed, 'one click only arms it').toBe(0);
     expect(kill.getAttribute('data-armed')).toBe('1');

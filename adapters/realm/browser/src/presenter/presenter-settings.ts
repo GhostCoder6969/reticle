@@ -394,7 +394,10 @@ export function settingsPanelHtml(): string {
         <button type="button" class="reticle-settings-link" data-reticle-settings-mcp>MCP setup guide<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></button>
         <a class="reticle-settings-link" data-reticle-feedback-email href="${FOUNDER_MAILTO}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.EMAIL_TITLE}">${FEEDBACK_TEXT.EMAIL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
         <a class="reticle-settings-link" data-reticle-feedback-call href="${DISCOVERY_CALL_URL}" target="_blank" rel="noopener noreferrer" title="${FEEDBACK_TEXT.CALL_TITLE}">${FEEDBACK_TEXT.CALL}<span class="reticle-settings-link-caret" aria-hidden="true">${caret}</span></a>
-        <button type="button" class="reticle-settings-kill" ${KILL_ATTR}><span data-reticle-kill-label>${KILL_TEXT.LABEL}</span><span class="reticle-settings-kill-sub">${KILL_TEXT.WARNING}</span></button>
+        <div class="reticle-settings-kill-row">
+          <button type="button" class="reticle-settings-kill" ${KILL_ATTR}><span data-reticle-kill-label>${KILL_TEXT.LABEL}</span></button>
+          <p class="reticle-settings-kill-sub">${KILL_TEXT.WARNING}</p>
+        </div>
         </div>
       </div>
     </div>
