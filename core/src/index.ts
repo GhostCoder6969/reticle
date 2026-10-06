@@ -27,6 +27,7 @@ export * from './artifacts/flow-unreached.js'; // unreachedRoutes — known rout
 export * from './artifacts/flow-mutation-target.js'; // what a flow says it depends on: mutationTargetsFor + perturbationFor
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
+export * from './identity/testid-attribute.js'; // DEFAULT_TESTID_ATTR, ALTERNATIVE_TESTID_ATTRS
 export * from './wire/event-classification.js'; // CHURN_TYPES — shared eviction priority for buffer/queue
 export * from './wire/global-press.js'; // which press is a document key (Escape / Tab / a shortcut)
 export * from './wire/hold.js'; // clampHoldMs — the bounded hold both input paths honour

@@ -303,8 +303,12 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * holding for longer through one route than the other, which is the defect the clamp exists to stop.
  *
  * Raised by 1,000 over the measurement (247,238), rounded down to the hundred, per the note above.
+ *
+ * Raised again to 249,700 when the project-chosen test-id attribute (#1395) met this release's HUD
+ * work: every query, observer and recorder now reads the attribute name instead of a literal, and
+ * the two together measured 248,736.
  */
-const MAX_FIRST_LOAD_BYTES = 248_400;
+const MAX_FIRST_LOAD_BYTES = 249_700;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

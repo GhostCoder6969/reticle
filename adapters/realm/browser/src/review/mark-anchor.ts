@@ -1,3 +1,4 @@
+import { readTestId } from '@/dom/addressing/testid-attr.js';
 import { MarkAnchorStrategy } from '@reticlehq/core';
 import {
   AnchorStrategy,
@@ -7,9 +8,6 @@ import {
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 import { sourceFor } from '@/dom/addressing/source.js';
-
-/** Attribute names — defined locally per the recorder/query convention (no shared free string). */
-const TESTID_ATTR = 'data-testid';
 
 /**
  * The element address carried by a human review mark: a re-resolvable anchor (auto-anchor's most
@@ -44,7 +42,7 @@ function labelFor(el: Element, role: string, name: string): string {
  * it everywhere else — and always reports the source file:line when one is available.
  */
 export function resolveMarkAnchor(el: Element): MarkAnchor {
-  const testid = el.getAttribute(TESTID_ATTR) ?? undefined;
+  const testid = readTestId(el) ?? undefined;
   const info = identifyComponent(el);
   const component = info?.componentStack[0];
   const source = sourceFor(el, info?.source);

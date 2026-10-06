@@ -1,3 +1,4 @@
+import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
 import { EventType, TruncationChannel } from '@reticlehq/core';
 import { getAccessibleName, getRole, isVisible } from '@/dom/a11y.js';
 import { refs } from '@/dom/addressing/refs.js';
@@ -11,8 +12,8 @@ import { refs } from '@/dom/addressing/refs.js';
 function regionKeyOf(target: Node): string | undefined {
   const el = isElement(target) ? target : null;
   if (null === el) return undefined;
-  const labelled = el.closest('[data-testid]');
-  return labelled?.getAttribute('data-testid') ?? refs.refFor(el);
+  const labelled = el.closest(testIdSelector());
+  return (labelled ? readTestId(labelled) : null) ?? refs.refFor(el);
 }
 import { isReticleOverlay } from '@/dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';

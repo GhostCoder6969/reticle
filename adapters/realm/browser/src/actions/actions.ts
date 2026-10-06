@@ -1,3 +1,4 @@
+import { readTestId } from '@/dom/addressing/testid-attr.js';
 import {
   ActionType,
   ActionWarning,
@@ -178,7 +179,7 @@ interface CapturedAnchor {
  * are agent-initiated and rare, so the walk's cost is not on any hot path.
  */
 function anchorOf(el: Element): CapturedAnchor {
-  const testid = el.getAttribute('data-testid') ?? undefined;
+  const testid = readTestId(el) ?? undefined;
   const info = identifyComponent(el);
   const out: CapturedAnchor = {};
   if (testid !== undefined) out.testid = testid;

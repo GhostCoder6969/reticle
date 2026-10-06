@@ -208,6 +208,13 @@ export interface QueryEmptyHint {
    * stays exact; the miss answers.
    */
   nameNearMiss?: string[];
+  /**
+   * Present only when a TESTID search missed and the value IS on the page under a different test-id
+   * attribute (`data-test-subj`, `data-cy`, ...). The testid locator reads one attribute; naming the
+   * one that holds the value turns "matched no element" into a one-line config fix
+   * (`testIdAttribute` in `.reticle.json`).
+   */
+  testidFoundUnder?: string;
 }
 
 /** Result of the QUERY command / reticle_query tool. `hint` present ONLY on zero matches. */

@@ -10,6 +10,7 @@ import {
   resolveProjectId,
   shortHash,
   slugifyPackageName,
+  readConfiguredTestIdAttribute,
 } from './project-id.js';
 
 describe('slugifyPackageName', () => {
@@ -184,5 +185,20 @@ describe('readConfiguredPort', () => {
 
   it('is undefined with no config', () => {
     expect(readConfiguredPort('/nowhere', tree({}))).toBeUndefined();
+  });
+});
+
+describe('readConfiguredTestIdAttribute', () => {
+  const file = (json: unknown) => () => JSON.stringify(json);
+
+  it('reads testIdAttribute from .reticle.json', () => {
+    expect(readConfiguredTestIdAttribute('/a', file({ testIdAttribute: 'data-test-subj' }))).toBe(
+      'data-test-subj',
+    );
+  });
+
+  it('is undefined when absent, or when not a plain attribute name', () => {
+    expect(readConfiguredTestIdAttribute('/a', file({ projectId: 'x' }))).toBeUndefined();
+    expect(readConfiguredTestIdAttribute('/a', file({ testIdAttribute: 'a b]' }))).toBeUndefined();
   });
 });

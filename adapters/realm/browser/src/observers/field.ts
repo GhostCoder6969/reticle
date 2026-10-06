@@ -15,7 +15,8 @@
  * LENGTH always rides out, because "it was wiped" is the assertion this exists for and a length
  * says it while carrying nobody's data.
  */
-import { EventType, isSensitiveKey } from '@reticlehq/core';
+import { readTestId } from '@/dom/addressing/testid-attr.js';
+import { DEFAULT_TESTID_ATTR, EventType, isSensitiveKey } from '@reticlehq/core';
 import { getAccessibleName } from '@/dom/a11y.js';
 import type { Emit, Teardown } from './types.js';
 
@@ -51,7 +52,7 @@ function isField(target: EventTarget | null): target is Field {
  * accessible name, which is what a person reading the page would call it.
  */
 function fieldName(element: Field): string {
-  const testid = element.getAttribute('data-testid');
+  const testid = readTestId(element);
   if (null !== testid && testid.length > 0) return testid;
   if (element.name.length > 0) return element.name;
   const accessible = getAccessibleName(element);
@@ -67,7 +68,8 @@ function isSecret(element: Field): boolean {
   if (null !== hint && PAYMENT_AUTOCOMPLETE.test(hint)) return true;
   for (const key of [
     element.name,
-    element.getAttribute('data-testid'),
+    readTestId(element),
+    element.getAttribute(DEFAULT_TESTID_ATTR),
     element.getAttribute('id'),
   ]) {
     if (null !== key && key.length > 0 && isSensitiveKey(key)) return true;

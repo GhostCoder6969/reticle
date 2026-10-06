@@ -1,3 +1,4 @@
+import { readTestId } from '@/dom/addressing/testid-attr.js';
 import {
   ActionType,
   AnchorKind,
@@ -39,7 +40,6 @@ export const RECORDER_EMPTY_MSG = 'recorded 0 steps';
 const STATUS_RECORDING = 'recording…';
 const STATUS_IDLE = 'ready';
 const STATUS_ANNOTATE = 'pick an annotation';
-const TESTID_ATTR = 'data-testid';
 const TOOL = FlowStepTool.ACT;
 
 const BUTTON_LABEL = {
@@ -97,7 +97,7 @@ const DEFAULT_NAME = 'recorded-flow';
  * else the DEGRADED_ANCHOR_ROLE placeholder + degraded:true (never a ref — invariant #1).
  */
 export function anchorFor(el: Element): { anchor: FlowAnchor; degraded: boolean } {
-  const testid = el.getAttribute(TESTID_ATTR);
+  const testid = readTestId(el);
   if (testid !== null && testid.length > 0) {
     return { anchor: { kind: AnchorKind.TESTID, value: testid }, degraded: false };
   }

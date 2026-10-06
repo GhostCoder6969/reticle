@@ -10,7 +10,7 @@
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { PROJECT_ID_HASH_LENGTH, projectIdFrom } from '@reticlehq/core';
+import { PROJECT_ID_HASH_LENGTH, TESTID_ATTR_PATTERN, projectIdFrom } from '@reticlehq/core';
 
 /** The project config `reticle init` writes, and the id of record it carries. */
 const RETICLE_CONFIG_BASENAME = '.reticle.json';
@@ -150,6 +150,26 @@ export function readConfiguredPort(
     readFile,
     MAX_CONFIG_SEARCH_DEPTH,
     tcpPort,
+  );
+}
+
+/**
+ * Read `testIdAttribute` from the nearest `.reticle.json`, or undefined: the attribute this project
+ * marks controls with when it is not `data-testid` (`data-test-subj`, `data-cy`, ...). The page needs
+ * it to resolve `{ testid }`, and the file is the one place the CLI, the daemon and the plugin
+ * already agree on, so the plugin forwards it to `connect()` rather than asking for it twice.
+ */
+export function readConfiguredTestIdAttribute(
+  startDir: string,
+  readFile: ReadFile = readFileOrThrow,
+): string | undefined {
+  return readNearestField(
+    startDir,
+    RETICLE_CONFIG_BASENAME,
+    'testIdAttribute',
+    readFile,
+    MAX_CONFIG_SEARCH_DEPTH,
+    (value) => ('string' === typeof value && TESTID_ATTR_PATTERN.test(value) ? value : undefined),
   );
 }
 

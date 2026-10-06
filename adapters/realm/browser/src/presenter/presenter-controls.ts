@@ -1,3 +1,4 @@
+import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
 import { HumanControlKind, PresenterTone, SessionState, type FlowChip } from '@reticlehq/core';
 import { nativeSetTimeout, nativeClearTimeout } from '@/timers/native/native-timers.js';
 import { COPY_MARKS_ATTR, MARKS_ROW_ATTR } from './presenter-config.js';
@@ -405,7 +406,7 @@ export class ControlPanel {
     const all = this.#refs.allFlows;
     const doc = el.ownerDocument;
     const testids = new Set(
-      Array.from(doc.querySelectorAll('[data-testid]')).map((n) => n.getAttribute('data-testid')),
+      Array.from(doc.querySelectorAll(testIdSelector())).map((n) => readTestId(n)),
     );
     const playable = (f: FlowChip): boolean => f.start === undefined || testids.has(f.start);
     const recent = [...this.#flowItems]

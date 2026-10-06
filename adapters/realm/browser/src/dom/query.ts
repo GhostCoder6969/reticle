@@ -1,4 +1,6 @@
 import {
+  ALTERNATIVE_TESTID_ATTRS,
+  DEFAULT_TESTID_ATTR,
   DATA_RETICLE_SOURCE_ATTR,
   ElementState,
   QueryBy,
@@ -26,14 +28,16 @@ import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 import { refs } from './addressing/refs.js';
+import { getTestIdAttr, readTestId, testIdSelector } from './addressing/testid-attr.js';
 
-const TESTID_ATTR = 'data-testid';
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;
 const MAX_PRESENT_TESTIDS = 12;
 /** Bound the fiber-walk fallback so a component-name query can't scan an unbounded DOM. */
 const MAX_COMPONENT_CANDIDATES = 2000;
 /** Likely-actionable elements considered when resolving a component anchor without a source stamp. */
-const COMPONENT_CANDIDATE_SELECTOR = `[${SOURCE_ATTR}], [${TESTID_ATTR}], button, a, input, select, textarea, [role]`;
+/** A function, not a constant: the test-id attribute is configured at connect, after this module loads. */
+const componentCandidateSelector = (): string =>
+  `[${SOURCE_ATTR}], ${testIdSelector()}, button, a, input, select, textarea, [role]`;
 
 /**
  * Every candidate a semantic locator may match: the container ITSELF first, then its descendants.
@@ -194,7 +198,7 @@ function findByComponentName(container: HTMLElement, component: string): HTMLEle
   const out: HTMLElement[] = [];
   let scanned = 0;
   for (const el of Array.from(
-    container.querySelectorAll<HTMLElement>(COMPONENT_CANDIDATE_SELECTOR),
+    container.querySelectorAll<HTMLElement>(componentCandidateSelector()),
   )) {
     if (scanned >= MAX_COMPONENT_CANDIDATES) break;
     scanned += 1;
@@ -252,7 +256,7 @@ function queryByPlaceholder(container: HTMLElement, value: string): HTMLElement[
 }
 
 function queryByTestId(container: HTMLElement, value: string): HTMLElement[] {
-  return elementsUnder(container).filter((el) => el.getAttribute(TESTID_ATTR) === value);
+  return elementsUnder(container).filter((el) => readTestId(el) === value);
 }
 
 function queryByAlt(container: HTMLElement, value: string): HTMLElement[] {
@@ -594,7 +598,7 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
       const name =
         el.getAttribute('aria-label') ??
         resolveLabelledBy(el) ?? // aria-labelledby is an element ID - resolve it to the referenced TEXT
-        el.getAttribute('data-testid') ??
+        readTestId(el) ??
         undefined;
       const children = el.querySelectorAll('[role]');
       const sample: string[] = [];
@@ -603,7 +607,7 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
         const childRole = child.getAttribute('role');
         const childName =
           child.getAttribute('aria-label') ??
-          child.getAttribute('data-testid') ??
+          readTestId(child) ??
           child.textContent?.trim().slice(0, 40) ??
           '';
         if (childRole !== null && childName.length > 0) {
@@ -698,10 +702,28 @@ function nameNearMisses(container: HTMLElement, query: ElementQuery): string[] {
   return out;
 }
 
+/**
+ * For a missed TESTID query: the other test-id attribute (`data-test-subj`, `data-cy`, ...) that
+ * carries the wanted value, if one does. The locator reads exactly one attribute, so a project that
+ * marks controls differently sees "matched no element" on a button that is plainly there.
+ */
+function testidFoundUnder(container: HTMLElement, query: ElementQuery): string | undefined {
+  if (QueryBy.TESTID !== query.by || undefined === query.value) return undefined;
+  const configured = getTestIdAttr();
+  for (const attr of [DEFAULT_TESTID_ATTR, ...ALTERNATIVE_TESTID_ATTRS]) {
+    if (attr === configured) continue;
+    const found = elementsUnder(container).some(
+      (el) => el.getAttribute(attr) === query.value && !isIgnored(el),
+    );
+    if (found) return attr;
+  }
+  return undefined;
+}
+
 /** Diagnostic hint for a zero-match query: what testids ARE present in the searched scope. */
 function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const container = resolveContainer(query.scope).container ?? document.body;
-  const all = container.querySelectorAll(`[${TESTID_ATTR}]`);
+  const all = container.querySelectorAll(testIdSelector());
   const present: string[] = [];
   // Counted past the cap rather than stopping at it. The list is capped so the hint stays a hint;
   // the COUNT is what stops a capped list being read as the whole page. `all` is already in hand,
@@ -709,7 +731,7 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   const seen = new Set<string>();
   for (const el of Array.from(all)) {
     if (isIgnored(el)) continue; // the "what IS here" hint must not advertise Reticle's own UI either
-    const id = el.getAttribute(TESTID_ATTR);
+    const id = readTestId(el);
     if (null === id || 0 === id.length || seen.has(id)) continue;
     seen.add(id);
     if (present.length < MAX_PRESENT_TESTIDS) present.push(id);
@@ -737,6 +759,8 @@ function buildEmptyHint(query: ElementQuery): QueryEmptyHint {
   }
   const near = nameNearMisses(container, query);
   if (near.length > 0) hint.nameNearMiss = near;
+  const elsewhere = testidFoundUnder(container, query);
+  if (elsewhere !== undefined) hint.testidFoundUnder = elsewhere;
   return hint;
 }
 

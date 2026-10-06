@@ -281,7 +281,8 @@ describe('advertised surface cost', () => {
  */
 // With `durable`, `app` and `exhaustive` beside `compare`, the two together measure 145,676 to
 // 145,684 B, inside 146_000.
-const ALL_SURFACE_BYTE_BUDGET = 146_000;
+// 146_000 -> 146_400 for `push` on reticle_project and the query hint field (#1395): 146,174 B.
+const ALL_SURFACE_BYTE_BUDGET = 146_400;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

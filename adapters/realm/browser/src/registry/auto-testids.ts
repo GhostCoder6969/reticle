@@ -10,8 +10,7 @@
  * as the app's testable surface would be the tool describing itself.
  */
 
-const TESTID_ATTR = 'data-testid';
-const TESTID_SELECTOR = `[${TESTID_ATTR}]`;
+import { getTestIdAttr, testIdSelector } from '@/dom/addressing/testid-attr.js';
 
 /**
  * Ceiling on the reported list.
@@ -30,12 +29,12 @@ export function domTestids(doc: Document): string[] {
   const seen = new Set<string>();
   let nodes: ArrayLike<Element>;
   try {
-    nodes = doc.querySelectorAll(TESTID_SELECTOR);
+    nodes = doc.querySelectorAll(testIdSelector());
   } catch {
     return out; // a document that cannot be queried (detached, hostile) simply advertises nothing
   }
   for (let i = 0; i < nodes.length && out.length < MAX_AUTO_TESTIDS; i += 1) {
-    const value = nodes[i]?.getAttribute(TESTID_ATTR);
+    const value = nodes[i]?.getAttribute(getTestIdAttr());
     if (null === value || undefined === value) continue;
     const trimmed = value.trim();
     if (0 === trimmed.length || seen.has(trimmed)) continue;

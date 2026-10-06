@@ -47,6 +47,7 @@ import {
   type CapabilitiesInput,
 } from './registry/capabilities.js';
 import { installAllObservers, runTeardowns } from './observers/install-all.js';
+import { setTestIdAttr } from './dom/addressing/testid-attr.js';
 import { setNetworkBodyMaxChars } from './observers/net-detail/network-body.js';
 import { installOverlay, type OverlayHandle } from './presenter/chrome/overlay.js';
 // TYPES only. Naming the panel's class here would put the whole panel in the first thing a page
@@ -422,6 +423,9 @@ export class Reticle {
     // Contributors only, and reported in capabilities so a verdict drawn with it open is never
     // mistaken for an ordinary one. See connect-options.ts.
     setPresenterVisible(true === options.exposePresenter);
+
+    // Before the observers install, so the very first testid they read already uses the right attribute.
+    setTestIdAttr(options.testIdAttribute);
 
     // Before the observers install, so the very first captured body already honours the cap.
     if (options.networkBodyMaxChars !== undefined) {

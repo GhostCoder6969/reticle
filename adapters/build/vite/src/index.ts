@@ -10,7 +10,7 @@ import {
   RETICLE_ROOT_GLOBAL,
   RETICLE_SDK_VERSION_GLOBAL,
 } from '@reticlehq/core';
-import { resolveProjectId } from './project-id.js';
+import { readConfiguredTestIdAttribute, resolveProjectId } from './project-id.js';
 import { resolveDaemonPort } from './discover-port.js';
 import { announceDevServer } from './announce.js';
 import { stampSvelte } from './svelte-source.js';
@@ -208,6 +208,8 @@ export interface ReticleVitePluginOptions {
    * vite.config.
    */
   networkBodyMaxChars?: number;
+  /** Attribute this app marks controls with instead of `data-testid`. Defaults to `.reticle.json`'s `testIdAttribute`. */
+  testIdAttribute?: string;
   /**
    * Retain a FAILED request's response body even with `captureNetworkBodies` off. Default true.
    *
@@ -624,7 +626,15 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
     // tree, and they travel in the generated connect call rather than through a `define`.
     const appRoot = withToken.root ?? root ?? process.cwd();
     const sdkVersion = withToken.sdkVersion ?? sdkPackageVersion(appRoot);
-    return { ...withToken, root: appRoot, sdkVersion };
+    // `.reticle.json` is where a project names its test-id attribute, read per call like the port so
+    // an edit takes effect on the next page load; the option, when given, wins.
+    const testIdAttribute = withToken.testIdAttribute ?? readConfiguredTestIdAttribute(appRoot);
+    return {
+      ...withToken,
+      root: appRoot,
+      sdkVersion,
+      ...(testIdAttribute === undefined ? {} : { testIdAttribute }),
+    };
   };
   /**
    * The connect module's source as it would be served RIGHT NOW. Recomputed rather than cached: the

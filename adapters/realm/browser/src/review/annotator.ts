@@ -1,3 +1,4 @@
+import { readTestId } from '@/dom/addressing/testid-attr.js';
 import { isSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
 import { EventType } from '@reticlehq/core';
 import { isReticleUi, isReticleOverlay } from '@/dom/dom-ignore.js';
@@ -735,7 +736,7 @@ function clampPop(x: number, y: number): { left: number; top: number } {
 }
 
 function describeEl(el: Element): string {
-  const testid = el.getAttribute('data-testid');
+  const testid = readTestId(el);
   if (testid !== null && testid.length > 0) return testid;
   const tag = el.tagName.toLowerCase();
   const aria = el.getAttribute('aria-label');

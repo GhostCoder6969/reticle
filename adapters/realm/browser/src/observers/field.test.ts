@@ -11,9 +11,12 @@
  * where somebody's password, card number and address are typed.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventType } from '@reticlehq/core';
 import { installField } from './field.js';
+import { setTestIdAttr } from '@/dom/addressing/testid-attr.js';
+
+afterEach(() => setTestIdAttr(undefined));
 
 interface Emitted {
   type: string;
@@ -112,6 +115,16 @@ describe('installField', () => {
 
     it('never carries a payment autocomplete field, whatever it is called', () => {
       const { events } = page('<input autocomplete="cc-number" data-testid="pan" value="4111" />');
+      const input = document.querySelector('input');
+      if (null === input) throw new Error('no input');
+      fire(input, 'change');
+      expect(events[0]?.data['value']).toBeUndefined();
+      expect(events[0]?.data['redacted']).toBe(true);
+    });
+
+    it('still redacts a data-testid secret after data-cy is configured', () => {
+      setTestIdAttr('data-cy');
+      const { events } = page('<input data-testid="api-key" value="s3cret" />');
       const input = document.querySelector('input');
       if (null === input) throw new Error('no input');
       fire(input, 'change');

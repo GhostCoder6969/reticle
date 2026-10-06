@@ -71,5 +71,8 @@ export function connectArgs(options: ReticleVitePluginOptions): string {
   ) {
     args['allowNonLocalhost'] = true;
   }
+  if (options.testIdAttribute !== undefined && options.testIdAttribute.length > 0) {
+    args['testIdAttribute'] = options.testIdAttribute;
+  }
   return Object.keys(args).length > 0 ? JSON.stringify(args) : '';
 }
