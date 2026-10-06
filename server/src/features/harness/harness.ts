@@ -112,7 +112,12 @@ export const StopReason = {
   STALLED: 'stalled',
   /** The toolset or the model itself failed in a way the loop cannot continue through. */
   BROKEN: 'broken',
+  /** A person switched autonomous driving off while it was driving. Not a failure. */
+  STOPPED: 'stopped',
 } as const;
+
+/** Thrown by a driver when a person, not a fault, ended the drive. */
+export class DriveStoppedError extends Error {}
 export type StopReason = (typeof StopReason)[keyof typeof StopReason];
 
 export interface HarnessResult {
@@ -278,7 +283,7 @@ export async function runHarness(
       );
     } catch (error) {
       return {
-        stopReason: StopReason.BROKEN,
+        stopReason: error instanceof DriveStoppedError ? StopReason.STOPPED : StopReason.BROKEN,
         summary: '',
         steps: step,
         toolCalls,

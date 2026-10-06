@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { runHarness, type HarnessToolset, type ModelDriver } from '../harness.js';
+import {
+  DriveStoppedError,
+  runHarness,
+  type HarnessToolset,
+  type ModelDriver,
+} from '../harness.js';
 import { serverDriver } from './server-driver.js';
 
 const toolset = (seen: string[]): HarnessToolset => ({
@@ -107,5 +112,25 @@ describe('the platform drives, this machine executes', () => {
     );
     expect(result.stopReason).toBe('broken');
     expect(result.error).toContain('402');
+  });
+});
+
+describe('autonomous driving switched off mid-run', () => {
+  it('ends the drive as stopped, not broken', async () => {
+    const answers = [
+      { status: 201, body: { runId: 'hr_1' } },
+      { status: 409, body: { error: { code: 'harness_off', message: 'switched off' } } },
+    ];
+    const driver = serverDriver({
+      url: 'https://p.test',
+      apiKey: 'k',
+      fetch: () => {
+        const next = answers.shift() ?? { status: 500, body: {} };
+        return Promise.resolve(new Response(JSON.stringify(next.body), { status: next.status }));
+      },
+    });
+    await expect(driver.turn({ system: '', tools: [], history: [] })).rejects.toBeInstanceOf(
+      DriveStoppedError,
+    );
   });
 });

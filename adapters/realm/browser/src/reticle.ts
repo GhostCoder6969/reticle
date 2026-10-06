@@ -23,6 +23,7 @@ import {
   newDocumentId,
   NO_EDITS_OBSERVED,
   PresenterMode,
+  CommandActor,
   type CommandMessage,
   type HelloMessage,
   type RedactionConfig,
@@ -60,7 +61,7 @@ import type {
   ControlIntent,
 } from './presenter/presenter.js';
 // Values, from a leaf file that pulls nothing in behind it. See log-kinds.ts.
-import { LOG_KIND, LOG_RESULT } from './presenter/chrome/log-kinds.js';
+import { LOG_ACTOR, LOG_KIND, LOG_RESULT } from './presenter/chrome/log-kinds.js';
 import { actionVerb } from './presenter/chrome/presenter-verbs.js';
 import { str, refLabel, modeForCommand, presentStatus } from './reticle-presenter-helpers.js';
 import { resetClock } from './timers/clock.js';
@@ -810,10 +811,16 @@ export class Reticle {
     if (p === undefined) return;
     p.setMode(modeForCommand(command.name)); // paint reading vs acting intent first
     this.#actHandle = undefined;
+    const actor = CommandActor.HARNESS === command.by ? LOG_ACTOR.HARNESS : LOG_ACTOR.AGENT;
     if (command.name === ReticleCommand.ACT) {
       const ref = str(command.args['ref']);
       const label = refLabel(ref);
-      this.#actHandle = p.log(LOG_KIND.ACT, `${actionVerb(str(command.args['action']))} ${label}`);
+      this.#actHandle = p.log(
+        LOG_KIND.ACT,
+        `${actionVerb(str(command.args['action']))} ${label}`,
+        undefined,
+        actor,
+      );
       await p.beforeAct(ref, str(command.args['action']), label);
     } else if (command.name === ReticleCommand.ACT_SEQUENCE) {
       const steps = Array.isArray(command.args['steps']) ? command.args['steps'] : [];
@@ -822,13 +829,18 @@ export class Reticle {
         const ref = str(s.ref);
         const label = refLabel(ref);
         // one log row per step; the last handle carries the sequence outcome glyph
-        this.#actHandle = p.log(LOG_KIND.ACT, `${actionVerb(str(s.action))} ${label}`);
+        this.#actHandle = p.log(
+          LOG_KIND.ACT,
+          `${actionVerb(str(s.action))} ${label}`,
+          undefined,
+          actor,
+        );
         await p.beforeAct(ref, str(s.action), label);
       }
     } else {
       const label = presentStatus(command.name, command.args);
       p.status(label);
-      p.log(LOG_KIND.READ, label);
+      p.log(LOG_KIND.READ, label, undefined, actor);
     }
   }
 }

@@ -43,6 +43,7 @@ import { fetchPlatformConfig, type ConfigFetch } from '@/features/harness/platfo
 import {
   DEFAULT_MAX_STEPS,
   runHarness,
+  StopReason,
   type HarnessResult,
   type HarnessToolset,
   type ModelDriver,
@@ -276,6 +277,8 @@ export async function exploreApp(
       ...(options.focus === undefined ? {} : { persona: options.focus }),
     },
   });
+  const narrate = narrator(deps, options);
+  narrate(`Harness is driving${options.focus === undefined ? '' : `: ${options.focus}`}`);
   const drive = await runHarness(driver, toolset, {
     maxSteps,
     // The plan rides in as standing instruction, so it is in front of the model on every turn
@@ -287,6 +290,11 @@ export async function exploreApp(
     ].join('\n\n'),
   });
 
+  narrate(
+    StopReason.STOPPED === drive.stopReason
+      ? `Autonomous driving switched off — the Harness stopped after ${String(drive.steps)} steps. What it drove is kept.`
+      : `Harness finished — ${drive.proved ? 'proved its checks' : 'nothing proved'} (${drive.stopReason})`,
+  );
   // Written once, after the drive, whatever the drive did: a run that broke still learned what it
   // learned, and the next one should not pay for it again.
   await fills.flush();
@@ -317,6 +325,17 @@ export async function exploreApp(
   return { drive, plan, driverName: built.name, ...reconciled, unverifiedFlows, goals };
 }
 
+/** A line in the HUD's Agent Log for the person watching; nobody watching is not an error. */
+function narrator(deps: ToolDeps, options: ExploreOptions): (text: string) => void {
+  return (text) => {
+    try {
+      deps.sessions.resolve(options.sessionId).pushNarration(text);
+    } catch {
+      /* nobody is watching: the drive still runs */
+    }
+  };
+}
+
 /** Drive each proposed persona in turn, and fold their results into one answer. */
 async function explorePersonas(
   deps: ToolDeps,
@@ -324,13 +343,7 @@ async function explorePersonas(
   options: ExploreOptions,
   personas: readonly Persona[],
 ): Promise<ExploreResult> {
-  const narrate = (text: string): void => {
-    try {
-      deps.sessions.resolve(options.sessionId).pushNarration(text);
-    } catch {
-      /* nobody is watching: the plan still runs */
-    }
-  };
+  const narrate = narrator(deps, options);
   narrate(`Plan · ${String(personas.length)} personas: ${personas.map((p) => p.name).join(', ')}`);
   const results: ExploreResult[] = [];
   const lines: string[] = [];

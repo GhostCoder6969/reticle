@@ -11,13 +11,22 @@
  * on: the drive carries on with `fallback`, the local path this machine used before, and says so.
  */
 import { ReticleEnv, cloudUrlFrom } from '@reticlehq/core';
-import type { HarnessTool, ModelDriver, ModelTurn, ToolOutcome, ToolRequest } from '../harness.js';
+import {
+  DriveStoppedError,
+  type HarnessTool,
+  type ModelDriver,
+  type ModelTurn,
+  type ToolOutcome,
+  type ToolRequest,
+} from '../harness.js';
 
 export const SERVER_DRIVER_NAME = 'server';
 const RUNS_PATH = '/v1/harness/runs';
 const TURN_TIMEOUT_MS = 110_000;
 const RETRIES = 1;
 const NOT_SERVED = new Set([404, 405]);
+/** The platform's code for a run whose project had autonomous driving switched off. */
+const HARNESS_OFF = 'harness_off';
 const FINISH = 'finish';
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
@@ -90,12 +99,14 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
         const text = await res.text();
         if (!res.ok) {
           const message = errorMessage(text) ?? `the platform answered ${String(res.status)}`;
+          // A person turned it off: the drive ends, and the result says that rather than "broken".
+          if (HARNESS_OFF === errorCode(text)) throw new DriveStoppedError(message);
           // A refusal is an answer; only a network failure is worth asking again.
           throw new ServerHarnessError(message, res.status);
         }
         return JSON.parse(text) as unknown;
       } catch (error) {
-        if (error instanceof ServerHarnessError) throw error;
+        if (error instanceof ServerHarnessError || error instanceof DriveStoppedError) throw error;
         last = error;
       }
     }
@@ -177,6 +188,15 @@ function outcomeOf(o: ToolOutcome): {
   isError: boolean;
 } {
   return { id: o.id, name: o.name, result: o.result, isError: o.isError };
+}
+
+function errorCode(text: string): string | undefined {
+  try {
+    const body = JSON.parse(text) as { error?: { code?: unknown } };
+    return 'string' === typeof body.error?.code ? body.error.code : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function errorMessage(text: string): string | undefined {

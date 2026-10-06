@@ -4,6 +4,7 @@ import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
 import { recordImpact } from '@/memory/impact/impact-recorder.js';
 import { recordNotes } from './human/notes-ledger.js';
+import { commandPayload } from './command-payload.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { CaptureLedger } from '@/surface/tools/feature-capture.js';
@@ -27,7 +28,6 @@ import {
   HumanMarkDataSchema,
   HudUseDataSchema,
   ReticleCommand,
-  MessageKind,
   parseEventPayload,
   PresenterTone,
   SESSION_HEALTH,
@@ -678,13 +678,7 @@ export class Session implements HandshakeFacts {
     const successor = this.#liveSuccessor();
     if (successor !== undefined) return successor.command(name, args, timeoutMs);
     const id = this.#pending.nextId(COMMAND_ID_PREFIX);
-    const payload = JSON.stringify({
-      kind: MessageKind.COMMAND,
-      id,
-      sessionId: this.id,
-      name,
-      args,
-    });
+    const payload = commandPayload(id, this.id, name, args);
     // The timeout message is built LAZILY: health can change while a command is in flight, and the
     // diagnosis should describe the page as it was when the command actually gave up.
     const awaited = this.#pending.track(id, timeoutMs, () =>
@@ -984,13 +978,7 @@ export class Session implements HandshakeFacts {
       if ('string' === typeof ref) this.recordActedRef(ref);
     }
     const id = this.#pending.nextId(COMMAND_ID_PREFIX);
-    const payload = JSON.stringify({
-      kind: MessageKind.COMMAND,
-      id,
-      sessionId: this.id,
-      name,
-      args,
-    });
+    const payload = commandPayload(id, this.id, name, args);
     try {
       this.#socket.send(payload);
     } catch {

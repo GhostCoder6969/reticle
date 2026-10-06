@@ -200,4 +200,6 @@ const NOTHING_RECORDED: Record<StopReason, string> = {
   [StopReason.STALLED]:
     'The drive stopped asking for tools without finishing. Nothing was saved, and nothing is proved.',
   [StopReason.BROKEN]: 'The drive broke before saving anything — read `error`. Nothing is proved.',
+  [StopReason.STOPPED]:
+    'Autonomous driving was switched off before the drive saved anything. Nothing is proved; switch it back on to drive again.',
 };

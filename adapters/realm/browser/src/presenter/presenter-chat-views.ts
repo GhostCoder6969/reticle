@@ -13,6 +13,7 @@ import {
   PRESENTER_ICON_SIZE,
   PresenterIcon,
 } from './icons/presenter-icons.js';
+import { HUD_GLASS_PAINT } from './chrome/presenter-hud-chrome.js';
 
 export type ChatView = 'activity' | 'flows' | 'annotations';
 const HISTORY_KEY = 'reticle.annotations.history.v1';
@@ -121,7 +122,7 @@ export const CHAT_VIEWS_CSS = `
 [data-reticle-hud] .reticle-chat-nav .reticle-nav-count:empty{display:none;}
 [data-reticle-hud] .reticle-chat-nav .reticle-nav-count:not(:empty){position:absolute;top:0;right:0;min-width:13px;height:13px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;border-radius:99px;background:var(--reticle-accent);color:#fff;font-size:8px;font-weight:700;}
 [data-reticle-hud] .reticle-chat-nav .reticle-nav-count[hidden]{display:none;}
-[data-reticle-page-panel]{position:absolute;right:0;left:auto;bottom:calc(100% + 8px);z-index:6;box-sizing:border-box;width:var(--reticle-dock-w);max-width:min(var(--reticle-dock-w),calc(100vw - 16px));height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));max-height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));flex-direction:column;overflow:hidden;border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-lg);background:linear-gradient(180deg,var(--reticle-hud-surface),var(--reticle-hud-ground));box-shadow:0 12px 40px rgba(0,0,0,.45),0 0 54px -18px var(--reticle-c-active);color:var(--reticle-hud-text);font-size:13px;line-height:1.5;pointer-events:auto;text-align:left;}
+[data-reticle-page-panel]{position:absolute;right:0;left:auto;bottom:calc(100% + 8px);z-index:6;box-sizing:border-box;width:var(--reticle-dock-w);max-width:min(var(--reticle-dock-w),calc(100vw - 16px));height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));max-height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));flex-direction:column;overflow:hidden;border-radius:var(--reticle-hud-radius-lg);${HUD_GLASS_PAINT}color:var(--reticle-hud-text);font-size:13px;line-height:1.5;pointer-events:auto;text-align:left;}
 [data-reticle-page-panel][hidden]{display:none!important;}
 [data-reticle-page-open="annotations"] [data-reticle-page-panel="annotations"],[data-reticle-page-open="flows"] [data-reticle-page-panel="flows"]{display:flex;}
 [data-reticle-page-open="annotations"] [data-reticle-chat-panel],[data-reticle-page-open="flows"] [data-reticle-chat-panel]{display:none!important;}

@@ -40,6 +40,8 @@ export interface MutableConfigSource extends ConfigSource {
   applyWrite(enabled: boolean): void;
   recheck(): void;
   subscribe(listener: () => void): () => void;
+  /** Re-read in the background, telling listeners only when the answer changed. */
+  poll(): void;
 }
 
 export function harnessConfigSource(
@@ -53,6 +55,8 @@ export function harnessConfigSource(
   let inFlight = false;
   let queuedRefresh = false;
   let revision = 0;
+  /** Set for a background poll, so an unchanged answer does not repaint every HUD. */
+  let quiet = false;
   const listeners = new Set<() => void>();
   const notify = (): void => {
     for (const listener of listeners) listener();
@@ -66,11 +70,14 @@ export function harnessConfigSource(
       .then((cfg) => {
         // A failed read keeps the LAST good answer rather than blanking the control mid-session:
         // one dropped request is not evidence that somebody changed their mind.
+        const before = JSON.stringify(cached);
         if (startedAtRevision === revision) {
           if (cfg !== undefined) cached = cfg;
           fetchedAt = now();
         }
-        notify();
+        // A poll that learned nothing new repaints nothing; anything else is said at once.
+        if (!quiet || before !== JSON.stringify(cached)) notify();
+        quiet = false;
       })
       .catch(() => {
         if (startedAtRevision === revision) fetchedAt = now();
@@ -113,6 +120,11 @@ export function harnessConfigSource(
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    poll(): void {
+      if (inFlight) return;
+      quiet = true;
+      refresh();
+    },
   };
 }
 
@@ -133,7 +145,13 @@ export function harnessConfigsByRoot(
     let source = sources.get(root);
     if (source === undefined) {
       source = harnessConfigSource(() => load(root));
-      if (onChange !== undefined) source.subscribe(() => onChange(root));
+      if (onChange !== undefined) {
+        source.subscribe(() => onChange(root));
+        // The switch can be flipped anywhere: the console, another tab, the API. A HUD that only
+        // learned of it on its next tool call showed Harness ON over a drive that had stopped.
+        const live = source;
+        setInterval(() => live.poll(), FRESH_MS).unref();
+      }
       sources.set(root, source);
     }
     return source;

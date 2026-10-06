@@ -240,7 +240,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // duplicated in two tool files. 23 for `serving-directory.ts`: which checkout's dev server served
   // a page is a fact about this machine's processes, and `session` is the directory already allowed
   // to read daemon state and port holders -- every other home needed two new reaches for it.
-  'server/src/portal/session': 24,
+  // 25 with `command-payload.ts`: the command's wire JSON, moved out of `session.ts` (at its cap)
+  // when it gained the mark that says the Harness sent it.
+  'server/src/portal/session': 25,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others

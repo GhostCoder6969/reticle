@@ -27,7 +27,7 @@ import {
   SETTINGS_PLACEMENT_ATTR,
   CHAT_PANEL_ATTR,
 } from './presenter-config.js';
-import { HUD_DROP_SHADOW } from './chrome/presenter-hud-chrome.js';
+import { HUD_DROP_SHADOW, HUD_GLASS_PAINT } from './chrome/presenter-hud-chrome.js';
 
 export const RAIL_ATTR = 'data-reticle-rail';
 export const RAIL_SIGNIN_ATTR = 'data-reticle-rail-signin';
@@ -77,9 +77,8 @@ export const FRAME_CSS = `
   bottom:calc(100% + 8px + var(--reticle-rail-h) + var(--reticle-frame-gap));
   width:var(--reticle-dock-w);max-width:min(var(--reticle-dock-w),calc(100vw - 24px));
   height:var(--reticle-frame-h);max-height:var(--reticle-frame-h);
-  border:1px solid var(--reticle-hud-border);border-radius:var(--reticle-hud-radius-lg);
-  background:linear-gradient(180deg,var(--reticle-hud-surface),var(--reticle-hud-ground));
-  box-shadow:${HUD_DROP_SHADOW};}
+  border-radius:var(--reticle-hud-radius-lg);
+  ${HUD_GLASS_PAINT}}
 [${DOCK_ATTR}] [${SETTINGS_PANEL_ATTR}]::after{display:none;}
 [${DOCK_ATTR}] [${SETTINGS_PANEL_ATTR}] .reticle-settings-inner{height:100%;}
 [${DOCK_ATTR}] [${SETTINGS_PANEL_ATTR}] :is(.reticle-settings-body,.reticle-settings-foot){background:transparent;}

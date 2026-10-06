@@ -52,4 +52,20 @@ describe('HUD Harness configuration cache', () => {
     expect(source.read()?.harnessEnabled).toBe(false);
     expect(changed).toHaveBeenCalled();
   });
+
+  it('hears a switch flipped somewhere else, and stays quiet when nothing changed', async () => {
+    let enabled = true;
+    const source = harnessConfigSource(() => Promise.resolve(config(enabled)));
+    await flush();
+    const changed = vi.fn();
+    source.subscribe(changed);
+    source.poll();
+    await flush();
+    expect(changed).not.toHaveBeenCalled();
+    enabled = false;
+    source.poll();
+    await flush();
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(source.read()?.harnessEnabled).toBe(false);
+  });
 });

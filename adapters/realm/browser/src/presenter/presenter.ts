@@ -22,6 +22,7 @@ import {
   appendLogRow,
   clearLogRows,
   trimLogRows,
+  type LogActor,
   type LogKind,
   type LogResult,
   type LogHandle,
@@ -655,7 +656,7 @@ export class Presenter {
    * with a mode chip + text. Returns a handle to stamp the row's outcome glyph (✓/✗) later, or
    * undefined when unmounted / when the text is empty after trimming.
    */
-  log(kind: LogKind, text: string, result?: LogResult): LogHandle | undefined {
+  log(kind: LogKind, text: string, result?: LogResult, actor?: LogActor): LogHandle | undefined {
     const ms = this.#now();
     this.#glowCtl.markActivity(ms);
     if (this.#log === undefined) return undefined;
@@ -670,7 +671,7 @@ export class Presenter {
     this.#runLog.push(entry);
     while (this.#runLog.length > this.#logMax) this.#runLog.shift();
     const ts = formatElapsed(ms - this.#logBaseMs);
-    const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax);
+    const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax, actor);
     if (result !== undefined) handle.result(result);
     if (this.#shell.isCollapsed()) this.#shell.pulseFab(true);
     this.#renderTally();

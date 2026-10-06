@@ -14,7 +14,11 @@ import {
   REDUCE_MOTION_ATTR,
   LIVENESS_ATTR,
 } from './presenter-config.js';
-import { HUD_DROP_SHADOW, HUD_SURFACE_FILL } from './chrome/presenter-hud-chrome.js';
+import {
+  HUD_DROP_SHADOW,
+  HUD_GLASS_PAINT,
+  HUD_SURFACE_FILL,
+} from './chrome/presenter-hud-chrome.js';
 
 const OVERLAY = 'data-reticle-overlay';
 const HUD = 'data-reticle-hud';
@@ -78,8 +82,7 @@ export const SHELL_CSS = `
  * without the bill.
  */
 [${CHAT_PANEL}]{
-  background:linear-gradient(180deg,var(--reticle-hud-surface),var(--reticle-hud-ground));
-  border:1px solid var(--reticle-hud-border);
+  ${HUD_GLASS_PAINT}
   display:none;position:absolute;right:0;left:auto;bottom:calc(100% + 8px);top:auto;z-index:5;
   box-sizing:border-box;width:var(--reticle-dock-w);max-width:min(var(--reticle-dock-w),calc(100vw - 16px));
   height:min(var(--reticle-chat-max-h,var(--reticle-chat-h)),calc(100vh - 120px));
@@ -87,7 +90,6 @@ export const SHELL_CSS = `
   flex-direction:column;overflow:hidden;text-align:left;
   color:var(--reticle-fg);font-size:13px;line-height:1.5;
   border-radius:var(--reticle-hud-radius-lg);
-  box-shadow:${HUD_DROP_SHADOW},0 0 54px -18px var(--reticle-c-active);
   contain:layout style paint;
   transform:translateZ(0);
   pointer-events:none;}
