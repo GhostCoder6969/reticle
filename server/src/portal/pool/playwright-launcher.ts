@@ -56,7 +56,14 @@ function wrapBrowser(browser: Browser): PooledBrowser {
             evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
             screenshot: async (opts) =>
-              new Uint8Array(await page.screenshot({ fullPage: true === opts?.fullPage })),
+              new Uint8Array(
+                await page.screenshot({
+                  fullPage: true === opts?.fullPage,
+                  ...(opts?.jpegQuality === undefined
+                    ? {}
+                    : { type: 'jpeg', quality: opts.jpegQuality }),
+                }),
+              ),
             // Three moves, same as performGesture: a single move to the center can be a no-op if
             // the pointer was already there, and CSS :hover needs a native hit-test to apply.
             hover: async (x, y) => {

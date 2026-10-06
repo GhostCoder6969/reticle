@@ -59,7 +59,10 @@ import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
-import { startRemoteDrives } from './features/harness/platform/remote-drive.js';
+import {
+  REMOTE_DRIVE_JPEG_QUALITY,
+  startRemoteDrives,
+} from './features/harness/platform/remote-drive.js';
 import { driveForChat } from './surface/tools/explore-tools.js';
 import { withLinkedCredential } from './surface/tools/harness-explore.js';
 import { runTool } from './surface/tools/invoke-tool.js';
@@ -725,6 +728,16 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     env: () => withLinkedCredential(effectiveDeps, process.env),
     connected: () => 0 < bridge.sessions.count(),
     drive: (goal) => driveForChat(effectiveDeps, goal),
+    // The tab being driven, when this daemon launched it. A tab only the SDK reaches has no camera.
+    frame: async () => {
+      try {
+        return await pool.screenshotLease(bridge.sessions.resolve().id, {
+          jpegQuality: REMOTE_DRIVE_JPEG_QUALITY,
+        });
+      } catch {
+        return undefined;
+      }
+    },
     log,
   });
 

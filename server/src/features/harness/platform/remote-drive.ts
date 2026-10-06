@@ -22,6 +22,13 @@ const RESULT_PATH = '/v1/harness/local-drives';
  */
 export const REMOTE_DRIVE_POLL_MS = 3_000;
 const REQUEST_TIMEOUT_MS = 10_000;
+/**
+ * How often the live picture is taken while a chat-requested drive runs. About one a second is what
+ * reads as video in the chat without turning a minute's drive into megabytes.
+ */
+export const REMOTE_DRIVE_FRAME_MS = 1_000;
+/** The same JPEG quality the platform's own checks film at: about 40 KB a picture. */
+export const REMOTE_DRIVE_JPEG_QUALITY = 50;
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -37,6 +44,12 @@ export interface RemoteDriveDeps {
   connected: () => boolean;
   /** Drive the app toward `goal`. A throw is reported as a failed drive, in its own words. */
   drive: (goal: string) => Promise<RemoteDriveOutcome>;
+  /**
+   * What the driven tab shows now, as a JPEG, or undefined when it cannot be captured (a tab this
+   * daemon did not launch). Absent: the drive runs with no picture, and the chat shows its steps.
+   */
+  frame?: () => Promise<Uint8Array | undefined>;
+  frameIntervalMs?: number;
   fetch?: FetchLike;
   intervalMs?: number;
   /** A line for the daemon log. */
@@ -70,18 +83,34 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!res.ok) return;
-      const drive = ((await res.json()) as { drive?: { id?: unknown; goal?: unknown } | null })
-        .drive;
+      const drive = (
+        (await res.json()) as { drive?: { id?: unknown; goal?: unknown; record?: unknown } | null }
+      ).drive;
       if (null === drive || undefined === drive) return;
       if ('string' !== typeof drive.id || 'string' !== typeof drive.goal) return;
       deps.log?.(`reticle: driving a request from the platform chat: ${drive.goal}`);
+      const driveUrl = `${platform.url}${RESULT_PATH}/${encodeURIComponent(drive.id)}`;
+      // Only when the person asked to watch: a picture of their app leaves this machine for it.
+      const filming =
+        false === drive.record || deps.frame === undefined
+          ? undefined
+          : film(deps.frame, deps.frameIntervalMs ?? REMOTE_DRIVE_FRAME_MS, (jpeg) =>
+              doFetch(`${driveUrl}/frames`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ jpeg }),
+                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+              }),
+            );
       let outcome: RemoteDriveOutcome;
       try {
         outcome = await deps.drive(drive.goal);
       } catch (error) {
         outcome = { ok: false, summary: error instanceof Error ? error.message : String(error) };
+      } finally {
+        await filming?.stop();
       }
-      await doFetch(`${platform.url}${RESULT_PATH}/${encodeURIComponent(drive.id)}`, {
+      await doFetch(driveUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(outcome),
@@ -101,6 +130,42 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
     stop: () => {
       stopped = true;
       clearInterval(timer);
+    },
+  };
+}
+
+/**
+ * Take a picture every `everyMs` and send it, until stopped. One capture at a time, and a picture
+ * identical to the last one sent is skipped: a page standing still is not worth a request a second.
+ * A failed capture or send is skipped too, never fatal: the drive matters, the picture of it less.
+ */
+function film(
+  frame: () => Promise<Uint8Array | undefined>,
+  everyMs: number,
+  send: (jpeg: string) => Promise<unknown>,
+): { stop: () => Promise<void> } {
+  let last: string | undefined;
+  let busy: Promise<void> | undefined;
+  const shoot = async (): Promise<void> => {
+    try {
+      const shot = await frame();
+      if (shot === undefined) return;
+      const jpeg = Buffer.from(shot).toString('base64');
+      if (jpeg === last) return;
+      last = jpeg;
+      await send(jpeg);
+    } catch {
+      // The next tick tries again.
+    }
+  };
+  const timer = setInterval(() => {
+    if (busy === undefined) busy = shoot().finally(() => (busy = undefined));
+  }, everyMs);
+  timer.unref();
+  return {
+    stop: async () => {
+      clearInterval(timer);
+      await busy;
     },
   };
 }

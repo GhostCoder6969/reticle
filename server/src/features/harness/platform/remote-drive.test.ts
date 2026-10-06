@@ -112,3 +112,53 @@ describe('drives the platform chat asked for', () => {
     expect(drives).toBe(1);
   });
 });
+
+describe('the live picture of a drive the chat asked for', () => {
+  const jpeg = (byte: number): Uint8Array => new Uint8Array([byte, byte, byte]);
+
+  it('sends what the driven tab shows while it drives, skipping repeats, and stops after', async () => {
+    const p = platform({ id: 'ld_5', goal: 'x' });
+    const shots = [jpeg(1), jpeg(1), jpeg(2)];
+    let release: () => void = () => undefined;
+    const remote = start({
+      fetch: p.fetch,
+      frameIntervalMs: 5,
+      frame: () => Promise.resolve(shots.shift()),
+      drive: () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, summary: '' });
+        }),
+    });
+    const ticking = remote.tick();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    release();
+    await ticking;
+    const sent = p.calls.filter((c) => c.url.endsWith('/ld_5/frames'));
+    expect(sent.map((c) => c.body)).toEqual([
+      { jpeg: Buffer.from(jpeg(1)).toString('base64') },
+      { jpeg: Buffer.from(jpeg(2)).toString('base64') },
+    ]);
+    const after = p.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(p.calls.length).toBe(after);
+  });
+
+  it('sends no picture when the drive asked not to be recorded', async () => {
+    const p = platform({ id: 'ld_6', goal: 'x', record: false });
+    let release: () => void = () => undefined;
+    const remote = start({
+      fetch: p.fetch,
+      frameIntervalMs: 5,
+      frame: () => Promise.resolve(jpeg(1)),
+      drive: () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true, summary: '' });
+        }),
+    });
+    const ticking = remote.tick();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    release();
+    await ticking;
+    expect(p.calls.some((c) => c.url.endsWith('/frames'))).toBe(false);
+  });
+});
