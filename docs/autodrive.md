@@ -36,6 +36,19 @@ Anything already recorded is **replayed**, deterministically, with no model call
 
 Every journey a drive walks is saved, whatever happens to the drive, including one that broke, ran out of budget, or whose model simply stopped asking for tools.
 
+## With no persona, it writes a plan first
+
+Called with no `persona`, explore writes the whole drive down before it starts, as a drive plan:
+
+- **Journeys.** Each saved flow worth replaying, plus one open journey for each persona the platform proposes, for the request the user declared (`reticle_intent { action: "declare" }`), and for each intent nobody has proved. Replays need no model; only open journeys reach one.
+- **Order.** A flow that `needs` another runs after it. An open journey runs after the flow everything else needs, usually sign-in.
+- **Lanes.** Each journey nothing else needs gets a lane holding what it needs, in order. Lanes run side by side, each in its own leased browser context, four at a time. A journey that needs one from another lane waits for it, and is blocked if that journey failed. A prerequisite that commits something (a payment, an email) runs in one lane only, and the others wait on it rather than commit it twice.
+- **Branches.** Flows that start with the same steps become one journey. The shared steps are driven once and marked as a checkpoint, then each flow continues from that point. Every flow after the first replays back to the checkpoint first, so none of them starts from the page the previous one left.
+
+The plan appears at the top of the HUD's Agent Log: one row per lane, a card per journey, the running journey opened to its steps, and each card marked as it passes, fails or is blocked. The tool's answer carries one line per journey.
+
+Two `reticle_flow_replay` arguments make the branches possible, and you can use them directly. `to` stops before a step. `at` continues at a step on the page as it is, without driving the steps before it. A part-way replay checks the steps it drove and records nothing about the flow as a whole.
+
 ## What it needs
 
 **A model in the daemon's environment.** Any one of three, and the choice is reported back so a comparison can never mislabel its own arms:
