@@ -52,7 +52,7 @@ It detects the framework and package manager, wires the build config, installs t
 reticle_act_and_wait { ref, action, until }
 ```
 
-Drive the journey that matters and put the verdict on its LAST step: `until` names the end state before the action fires. What you drive is saved as a flow, so later runs replay it with no model. If a model is configured (your own `ANTHROPIC_API_KEY`, or a linked project on a plan or trial), `reticle_verify { action: "explore", persona: "<who does what>" }` drives the whole journey for you instead.
+Drive the journey that matters and put the verdict on its LAST step: `until` names the end state before the action fires. What you drive is saved as a flow, so later runs replay it with no model. On a linked project (`reticle connect`; every plan, Free included, has monthly Harness credits), `reticle_verify { action: "explore", persona: "<who does what>" }` has the Reticle Harness drive the whole journey for you instead. Before driving anything, replay what is already saved: `reticle_verify { action: "flows" }` costs no model at all.
 
 ## What YOU decide, and pass in
 

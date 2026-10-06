@@ -592,6 +592,8 @@ export function buildDriver(
   plan: HarnessPlan,
   requested?: string,
   persona?: string,
+  /** A goal driven with no persona: it names the drive's flows as a persona would. */
+  journey?: string,
 ): { driver: ModelDriver; name: string } {
   if (requested !== undefined && SERVER_DRIVER !== requested)
     throw new Error(msgUnknownDriver(requested));
@@ -601,6 +603,7 @@ export function buildDriver(
     driver: serverDriver({
       ...platform,
       ...(persona === undefined ? {} : { persona }),
+      ...(journey === undefined ? {} : { journey }),
       plan: planAsText(plan),
       planSteps: plan.steps,
       vocabulary: plan.vocabulary,

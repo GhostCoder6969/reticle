@@ -40,6 +40,8 @@ export const NextText = {
   FINISH_LINKED:
     'Done driving? reticle_session { action: "yield" } hands the tab back; this run syncs to the platform on its own.',
   FINISH: 'Done driving? reticle_session { action: "yield" } hands the tab back.',
+  REPLAY: (flows: number): string =>
+    `This app has ${String(flows)} saved flow(s). Replay them before driving anything by hand: reticle_verify { action: "flows" } re-verifies them with no model.`,
 } as const;
 
 interface RootState {
@@ -47,6 +49,8 @@ interface RootState {
   verdicts: number;
   lastQuietAt: number;
   declareAsks: number;
+  /** Told about the saved flows already, which is said once per project. */
+  replayTold: boolean;
 }
 
 const roots = new Map<string, RootState>();
@@ -117,6 +121,24 @@ export interface NextStepInput {
   now: number;
 }
 
+/** Saved flow files under `flows/`, one level of project folders deep. */
+function savedFlows(dir: string): number {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).reduce(
+      (n, entry) =>
+        n +
+        (entry.isDirectory()
+          ? readdirSync(join(dir, entry.name)).filter((f) => f.endsWith('.json')).length
+          : entry.name.endsWith('.json')
+            ? 1
+            : 0),
+      0,
+    );
+  } catch {
+    return 0;
+  }
+}
+
 /** The line, or undefined when there is nothing the agent should be told right now. */
 export function nextStep(input: NextStepInput): string | undefined {
   const { root } = input;
@@ -126,6 +148,7 @@ export function nextStep(input: NextStepInput): string | undefined {
     verdicts: 0,
     lastQuietAt: Number.NEGATIVE_INFINITY,
     declareAsks: 0,
+    replayTold: false,
   };
   roots.set(root, state);
   state.calls += 1;
@@ -135,6 +158,13 @@ export function nextStep(input: NextStepInput): string | undefined {
   const sends = linked || 0 < (process.env[ReticleEnv.API_KEY] ?? '').length;
   const quietDue = state.calls - state.lastQuietAt >= QUIET_CALLS;
 
+  // Measured on a whole-app drive: an agent re-drove everything by hand while saved flows sat
+  // unreplayed, though the skill says to replay first. Said on the first call, where it is in time.
+  if (!state.replayTold && !input.tool.endsWith('verify')) {
+    state.replayTold = true;
+    const saved = savedFlows(join(root, ReticleDir.FLOWS_SUBDIR));
+    if (0 < saved) return NextText.REPLAY(saved);
+  }
   const problem = sends ? syncProblem(root, input.now) : undefined;
   if (problem !== undefined && (input.verdict || quietDue)) {
     state.lastQuietAt = state.calls;

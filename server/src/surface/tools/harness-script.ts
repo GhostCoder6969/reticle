@@ -7,8 +7,9 @@
  * the HUD and redrawn as each part starts and ends.
  */
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import { ReticleCommand, ScriptStatus } from '@reticlehq/core';
-import { PromptContextSchema, checkScript } from '@reticlehq/core/artifacts';
+import { PromptContextSchema, checkScript, type DriveScript } from '@reticlehq/core/artifacts';
 import {
   runScript,
   type ScriptPorts,
@@ -36,7 +37,13 @@ import {
   withoutReplays,
   type HarnessPlan,
 } from './harness-plan.js';
-import { personasIn, proposeScript } from '@/features/harness/platform/script.js';
+import {
+  journeyResults,
+  personasIn,
+  proposeScript,
+  reportPlanResults,
+  type JourneyResult,
+} from '@/features/harness/platform/script.js';
 import { checkGoals, goalsIn } from '@/features/harness/goals.js';
 import { serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import {
@@ -104,7 +111,7 @@ export async function exploreScript(
         )
       : '';
   const personas = focus === undefined ? personasIn(flows) : [];
-  const script = await proposeScript(platform, {
+  const proposed = await proposeScript(platform, {
     about,
     flows,
     replay,
@@ -113,7 +120,10 @@ export async function exploreScript(
     rules: known,
     personas,
   });
-  if (script === undefined || 0 < checkScript(script).length) return undefined;
+  if (proposed === undefined || 0 < checkScript(proposed.script).length) return undefined;
+  const { script, planId } = proposed;
+  // Saved the moment it exists, so a drive that breaks still leaves its plan behind.
+  const planFile = await savePlan(deps, options.sessionId, { planId, script });
 
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
   // The script replays the saved flows itself; a model handed them too replayed them again per goal.
@@ -127,7 +137,14 @@ export async function exploreScript(
   };
   const driverFor = (persona?: string, goal?: string): { driver: ModelDriver; name: string } =>
     options.driver === undefined
-      ? buildDriver(env, maxSteps, planFor(goal), options.driverName, persona)
+      ? buildDriver(
+          env,
+          maxSteps,
+          planFor(goal),
+          options.driverName,
+          persona,
+          persona === undefined ? goal : undefined,
+        )
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driverName = driverFor().name;
   const harness = randomUUID();
@@ -196,6 +213,11 @@ export async function exploreScript(
   } finally {
     clearInterval(poll);
   }
+  // How each journey went: kept beside the plan here, and told to the platform, whose next plan
+  // drives what failed first.
+  const results = journeyResults(run.view);
+  await savePlan(deps, options.sessionId, { planId, script, results }, planFile);
+  if (planId !== undefined) await reportPlanResults(platform, planId, results);
   for (const line of run.lines) narrate(line);
   narrate(
     run.stopped
@@ -284,5 +306,28 @@ function safeProjectId(deps: ToolDeps, sessionId?: string): string | undefined {
     return sessionTarget(deps, sessionId).projectId;
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Keep a plan in `.reticle/plans/`, and how it went once it has run. The same file is rewritten
+ * with the results, so one plan is one file. Never fails the drive: a plan that cannot be written
+ * is still a plan that runs.
+ */
+async function savePlan(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  plan: { planId?: string | undefined; script: DriveScript; results?: JourneyResult[] },
+  file?: string,
+): Promise<string | undefined> {
+  try {
+    const dir = reticleDirPaths(sessionRoot(deps, sessionId)).plans;
+    const path =
+      file ?? join(dir, `${new Date(deps.now()).toISOString().replace(/[:.]/g, '-')}.json`);
+    await deps.fs.mkdir(dir);
+    await deps.fs.writeFile(path, `${JSON.stringify({ at: deps.now(), ...plan }, null, 2)}\n`);
+    return path;
+  } catch {
+    return file;
   }
 }

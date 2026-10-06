@@ -416,14 +416,6 @@ export const ReticleDir = {
    * classified nor ignored.
    */
   INTENT_SUBDIR: 'intent',
-  /**
-   * what a drive types into a field, keyed by the field's label —.reticle/fill-values.json.
-   *
-   * Git-checked on purpose. A generated value is paid for once and then belongs to the project: the
-   * next drive reuses it for free, a replay sends exactly what the recording sent, and a human who
-   * dislikes one can edit the file rather than argue with a model.
-   */
-  FILL_VALUES_FILE: 'fill-values.json',
   /** opt-in pixel baselines —.reticle/visual/<name>.png + <name>.diff.png. */
   VISUAL_SUBDIR: 'visual',
   /** verification-run artifacts —.reticle/runs/<runId>.json (the OEM/CI-consumable verdict). */
@@ -438,6 +430,8 @@ export const ReticleDir = {
    * in three separate files, so the guard could not see it and nobody was ever asked.
    */
   FEEDBACK_SUBDIR: 'feedback',
+  /** Every Harness drive plan, and how each journey went — .reticle/plans/<when>-<planId>.json. */
+  PLANS_SUBDIR: 'plans',
   /** durable causal journal —.reticle/sessions/<id>/{events,actions}.jsonl (the substrate). */
   SESSIONS_SUBDIR: 'sessions',
   /** append-only event ledger inside a session dir (one ReticleEvent per line). */

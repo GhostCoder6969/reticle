@@ -103,3 +103,23 @@ describe('a project that sends through the key in the environment', () => {
     }
   });
 });
+
+/** From a whole-app drive: the agent re-drove everything by hand while saved flows sat unreplayed. */
+describe('an app with saved flows', () => {
+  it('is told to replay them, once, on its first call', () => {
+    const dir = root();
+    mkdirSync(join(dir, 'flows', 'shop'), { recursive: true });
+    writeFileSync(join(dir, 'flows', 'shop', 'checkout.json'), '{}');
+    writeFileSync(join(dir, 'flows', 'shop', 'refund.json'), '{}');
+    const first = nextStep({ tool: 'reticle_look', verdict: false, root: dir, now: 0 });
+    expect(first).toBe(NextText.REPLAY(2));
+    expect(nextStep({ tool: 'reticle_look', verdict: false, root: dir, now: 0 })).not.toBe(
+      NextText.REPLAY(2),
+    );
+  });
+
+  it('says nothing about flows that do not exist', () => {
+    const line = nextStep({ tool: 'reticle_look', verdict: false, root: root(), now: 0 });
+    expect(line ?? '').not.toContain('saved flow');
+  });
+});

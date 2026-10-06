@@ -8,12 +8,22 @@
  *
  * The answer is not trusted: it must parse as a drive script and pass the same checks a local plan
  * does, or it is dropped and the daemon plans locally.
+ *
+ * The platform keeps every plan under an id, and is told afterwards how each journey went: that is
+ * what the next plan learns from (what failed is driven first).
  */
 import { createHash } from 'node:crypto';
-import { StepEffect, type FlowFile, type FlowStep } from '@reticlehq/core';
+import {
+  ScriptStatus,
+  StepEffect,
+  type FlowFile,
+  type FlowStep,
+  type PlanView,
+} from '@reticlehq/core';
 import { DriveScriptSchema, checkScript, type DriveScript } from '@reticlehq/core/artifacts';
 
 const SCRIPTS_PATH = '/v1/harness/scripts';
+const RESULTS_PATH = '/results';
 const TIMEOUT_MS = 90_000;
 /** Characters of a step hash: enough to tell a flow's steps apart, too few to carry anything. */
 const STEP_HASH_CHARS = 12;
@@ -66,7 +76,7 @@ export async function proposeScript(
   platform: { url: string; apiKey: string },
   ask: ScriptAsk,
   doFetch: FetchLike = (url, init) => fetch(url, init),
-): Promise<DriveScript | undefined> {
+): Promise<{ script: DriveScript; planId?: string } | undefined> {
   try {
     const res = await doFetch(`${platform.url}${SCRIPTS_PATH}`, {
       method: 'POST',
@@ -91,10 +101,66 @@ export async function proposeScript(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return undefined;
-    const parsed = DriveScriptSchema.safeParse(((await res.json()) as { script?: unknown }).script);
+    const body = (await res.json()) as { script?: unknown; planId?: unknown };
+    const parsed = DriveScriptSchema.safeParse(body.script);
     if (!parsed.success || 0 < checkScript(parsed.data).length) return undefined;
-    return parsed.data;
+    return {
+      script: parsed.data,
+      ...('string' === typeof body.planId ? { planId: body.planId } : {}),
+    };
   } catch {
     return undefined;
+  }
+}
+
+/** One journey's outcome, as the platform keeps it beside the plan. */
+export interface JourneyResult {
+  id: string;
+  title: string;
+  status: ScriptStatus;
+}
+
+/** Worst first: a journey that ran in two lanes reports the worse of the two. */
+const SEVERITY: readonly ScriptStatus[] = [
+  ScriptStatus.FAILED,
+  ScriptStatus.BLOCKED,
+  ScriptStatus.RUNNING,
+  ScriptStatus.PENDING,
+  ScriptStatus.NOT_TAKEN,
+  ScriptStatus.PASSED,
+];
+
+/** How each journey of a run plan went, once each. */
+export function journeyResults(view: PlanView): JourneyResult[] {
+  const byId = new Map<string, JourneyResult>();
+  for (const lane of view.lanes)
+    for (const card of lane.journeys) {
+      const seen = byId.get(card.id);
+      if (seen === undefined || SEVERITY.indexOf(card.status) < SEVERITY.indexOf(seen.status))
+        byId.set(card.id, { id: card.id, title: card.title, status: card.status });
+    }
+  return [...byId.values()];
+}
+
+/** Tell the platform how its plan went. A failure costs the next plan its memory, never this run. */
+export async function reportPlanResults(
+  platform: { url: string; apiKey: string },
+  planId: string,
+  results: readonly JourneyResult[],
+  doFetch: FetchLike = (url, init) => fetch(url, init),
+): Promise<boolean> {
+  try {
+    const res = await doFetch(
+      `${platform.url}${SCRIPTS_PATH}/${encodeURIComponent(planId)}${RESULTS_PATH}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${platform.apiKey}` },
+        body: JSON.stringify({ results }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      },
+    );
+    return res.ok;
+  } catch {
+    return false;
   }
 }

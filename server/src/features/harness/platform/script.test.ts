@@ -6,7 +6,8 @@ import {
   ReticleTool,
   StepEffect,
 } from '@reticlehq/core';
-import { personasIn, proposeScript } from './script.js';
+import { journeyResults, personasIn, proposeScript, reportPlanResults } from './script.js';
+import { ScriptStatus } from '@reticlehq/core';
 
 const flow = {
   version: FLOW_FILE_VERSION,
@@ -59,7 +60,7 @@ describe('asking the platform for the drive plan', () => {
       lanes: [{ id: 'A', journeys: ['refund'] }],
     };
     const platform = { url: 'https://p', apiKey: 'k' };
-    expect((await proposeScript(platform, ask, answer(good)))?.source).toBe('platform');
+    expect((await proposeScript(platform, ask, answer(good)))?.script.source).toBe('platform');
     const orphaned = { ...good, lanes: [] };
     expect(await proposeScript(platform, ask, answer(orphaned))).toBeUndefined();
   });
@@ -95,5 +96,57 @@ describe('the personas a project already drove', () => {
       },
     );
     expect(sent['personas']).toEqual(personas);
+  });
+});
+
+/** The platform's next plan drives what failed first, so it has to be told what failed. */
+describe('how a plan went', () => {
+  const card = (id: string, status: ScriptStatus) => ({
+    id,
+    title: id,
+    waitsOn: [],
+    status,
+    steps: [],
+  });
+
+  it('reports each journey once, at its worst, though it ran in two lanes', () => {
+    const results = journeyResults({
+      parallel: 2,
+      lanes: [
+        {
+          id: 'A',
+          journeys: [card('signin', ScriptStatus.PASSED), card('refund', ScriptStatus.FAILED)],
+        },
+        {
+          id: 'B',
+          journeys: [card('signin', ScriptStatus.FAILED), card('settings', ScriptStatus.BLOCKED)],
+        },
+      ],
+    });
+    expect(results).toEqual([
+      { id: 'signin', title: 'signin', status: ScriptStatus.FAILED },
+      { id: 'refund', title: 'refund', status: ScriptStatus.FAILED },
+      { id: 'settings', title: 'settings', status: ScriptStatus.BLOCKED },
+    ]);
+  });
+
+  it('tells the platform against the plan’s own id', async () => {
+    let asked = '';
+    let body = '';
+    const ok = await reportPlanResults(
+      { url: 'https://p', apiKey: 'k' },
+      'hp_1',
+      [{ id: 'refund', title: 'Refund', status: ScriptStatus.FAILED }],
+      (url, init) => {
+        asked = url;
+        body = 'string' === typeof init.body ? init.body : '';
+        return Promise.resolve(new Response('{"saved":true}', { status: 200 }));
+      },
+    );
+    expect(ok).toBe(true);
+    expect(asked).toBe('https://p/v1/harness/scripts/hp_1/results');
+    expect(JSON.parse(body)).toEqual({
+      results: [{ id: 'refund', title: 'Refund', status: 'failed' }],
+    });
   });
 });

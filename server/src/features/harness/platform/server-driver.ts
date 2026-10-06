@@ -34,6 +34,8 @@ export interface ServerDriverOptions {
   url: string;
   apiKey: string;
   persona?: string;
+  /** The goal a drive with no persona is for: the platform names its flows after it. */
+  journey?: string;
   /** journey | brute-force | stress | madman | security. The platform defaults to journey. */
   mode?: string;
   /** What `.reticle` already knows, as text: saved journeys and open intents. */
@@ -119,6 +121,7 @@ export function serverDriver(options: ServerDriverOptions): ModelDriver {
       if (runId === undefined) {
         const started = (await call(RUNS_PATH, {
           ...(options.persona === undefined ? {} : { persona: options.persona }),
+          ...(options.journey === undefined ? {} : { journey: options.journey }),
           ...(options.mode === undefined ? {} : { mode: options.mode }),
           ...(options.plan === undefined ? {} : { plan: options.plan }),
           ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
