@@ -26,6 +26,7 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ### Fixed
 
+- **`@reticlehq/browser`: the in-HUD tour points at the redesigned HUD.** The Impact card rang a button the redesign renamed and the Annotate card a control that moved into the Notes page, so both pointed at nothing. They now ring the Impact button and the Notes tab, the first card is the Agent Log, and a new card introduces Saved flows. A test now fails when a tour card names a control the rendered HUD does not have.
 - **Release review fixes.** Found by a hostile review of this release before it shipped:
   - `.reticle/request.json` (the user's request in their own words) moved out of `intent/`, which is committed, to a local-only file. `platform-moments.json` is local-only too.
   - The HUD notices fetch honours `RETICLE_TELEMETRY=0` and `DO_NOT_TRACK=1`, and `docs/what-is-recorded.md` lists it, along with HUD notes and the request as the free text that can leave, each only when you choose.

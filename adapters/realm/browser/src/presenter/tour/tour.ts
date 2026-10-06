@@ -94,10 +94,12 @@ function unionOfVisible(doc: Document, selectors: readonly string[]): TourRect |
  * a switch so the set of pointable controls is one readable list; a slide naming an anchor that is
  * not here rings nothing, which is the same refusal as a HUD that is switched off.
  */
-const HUD_CONTROL_SELECTORS: Readonly<Partial<Record<TourAnchor, string>>> = {
+export const HUD_CONTROL_SELECTORS: Readonly<Partial<Record<TourAnchor, string>>> = {
   [TourAnchor.HUD_CHAT]: '[data-reticle-chat-toggle]',
-  [TourAnchor.HUD_ANNOTATE]: '[data-reticle-annotate-btn]',
-  [TourAnchor.HUD_IMPACT]: '[data-reticle-report-btn]',
+  [TourAnchor.HUD_FLOWS]: '[data-reticle-chat-view-btn="flows"]',
+  // The toolbar's Notes tab: the pin control lives inside that page, hidden until it opens.
+  [TourAnchor.HUD_ANNOTATE]: '[data-reticle-chat-view-btn="annotations"]',
+  [TourAnchor.HUD_IMPACT]: '[data-reticle-chat-impact]',
   [TourAnchor.HUD_SETTINGS]: '[data-reticle-settings-btn]',
 };
 
