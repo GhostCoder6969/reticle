@@ -17,7 +17,7 @@ import { ReticleTool, asRecord } from '@reticlehq/core';
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { runTool } from './invoke-tool.js';
-import type { RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
+import { driveVerdict, type RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
   exploreApp,
   harnessAvailable,
@@ -64,6 +64,11 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       unverifiedFlows: z.array(z.string()),
       /** Whether the drive ran at least one check. A drive that did not proved nothing. */
       proved: z.boolean(),
+      /**
+       * Whether every journey reached its goal, as the platform judged when the drive finished.
+       * Absent when no journey's goal was judged. Checks that held are not the goal reached.
+       */
+      goalMet: z.boolean().optional(),
       /** One verdict per requested goal, checked by the harness itself. Only `yes` is proved. */
       goals: z.array(z.object({ text: z.string(), verified: z.string() })),
       /**
@@ -121,6 +126,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         rewroteFlows: [...rewroteFlows],
         unverifiedFlows: [...unverifiedFlows],
         proved: drive.proved,
+        ...(drive.goalMet === undefined ? {} : { goalMet: drive.goalMet }),
         goals: [...goals],
         plan: { summary: plan.summary, steps: [...plan.steps] },
         // Derived, not narrated. The driver's own `summary` is appended only when it said
@@ -221,9 +227,22 @@ export async function driveForChat(
   const summary = 'string' === typeof out['summary'] ? out['summary'] : '';
   const error = 'string' === typeof out['error'] ? out['error'] : undefined;
   const note = 'string' === typeof out['note'] ? out['note'] : undefined;
+  const goals = Array.isArray(out['goals'])
+    ? out['goals'].flatMap((g) => {
+        const verified = asRecord(g)['verified'];
+        return 'string' === typeof verified ? [{ verified }] : [];
+      })
+    : [];
+  const goalMet = out['goalMet'];
   return {
     // Only a drive that ran a check and did not break counts as one that proved anything.
     ok: true === out['proved'] && error === undefined,
+    verdict: driveVerdict({
+      proved: true === out['proved'],
+      goals,
+      ...(error === undefined ? {} : { error }),
+      ...('boolean' === typeof goalMet ? { goalMet } : {}),
+    }),
     summary: [summary, note, error === undefined ? undefined : `Error: ${error}`]
       .filter((line): line is string => line !== undefined && 0 < line.length)
       .join('\n'),

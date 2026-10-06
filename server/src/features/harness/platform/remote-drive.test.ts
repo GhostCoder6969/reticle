@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import {
+  driveVerdict,
   pickDriveSession,
   startRemoteDrives,
   type RemoteDriveDeps,
@@ -220,5 +221,25 @@ describe('which tab a chat-requested drive uses', () => {
     await ticking;
     expect(driven).toEqual(['tab-2']);
     expect(new Set(filmed)).toEqual(new Set(['tab-2']));
+  });
+});
+
+describe('the verdict a chat-requested drive reports', () => {
+  it('is the goal judgement when the drive carries one', () => {
+    expect(driveVerdict({ goalMet: false, proved: true })).toBe('no');
+    expect(driveVerdict({ goalMet: true, proved: true })).toBe('yes');
+  });
+
+  it('falls back to the goals the harness checked itself', () => {
+    expect(driveVerdict({ proved: true, goals: [{ verified: 'yes' }, { verified: 'no' }] })).toBe(
+      'no',
+    );
+    expect(driveVerdict({ proved: true, goals: [{ verified: 'yes' }] })).toBe('yes');
+  });
+
+  it('is unknown when the drive broke or nothing settled the goal, never a pass by default', () => {
+    expect(driveVerdict({ goalMet: true, proved: true, error: 'browser died' })).toBe('unknown');
+    expect(driveVerdict({ proved: true })).toBe('unknown');
+    expect(driveVerdict({ goalMet: true, proved: false })).toBe('unknown');
   });
 });

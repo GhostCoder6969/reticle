@@ -35,7 +35,13 @@ type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 export interface RemoteDriveOutcome {
   ok: boolean;
   summary: string;
+  /** The verdict on the goal (see `driveVerdict`), so the platform keeps the drive as a check. */
+  verdict?: DriveVerdict;
+  /** The address the drive was on, for the check the platform keeps. */
+  url?: string;
 }
+
+export type DriveVerdict = 'yes' | 'no' | 'unknown';
 
 export interface RemoteDriveDeps {
   /** The environment with this machine's linked credential in it, resolved on every ask. */
@@ -224,4 +230,23 @@ export function pickDriveSession(
   let best: DriveCandidate | undefined;
   for (const tab of tabs) if (best === undefined || better(rank(tab), rank(best))) best = tab;
   return best?.sessionId;
+}
+
+/**
+ * The verdict on a drive's goal: the platform's judgement of the goal when it made one, else the
+ * goals the harness checked itself. A drive that broke, proved nothing, or whose goal nobody judged
+ * is `unknown`: "it ran and nothing threw" is not "the goal was reached".
+ */
+export function driveVerdict(out: {
+  goalMet?: boolean;
+  proved: boolean;
+  error?: string;
+  goals?: readonly { verified: string }[];
+}): DriveVerdict {
+  if (out.error !== undefined || !out.proved) return 'unknown';
+  if (out.goalMet !== undefined) return out.goalMet ? 'yes' : 'no';
+  const goals = out.goals ?? [];
+  if (goals.some((g) => 'no' === g.verified)) return 'no';
+  if (0 < goals.length && goals.every((g) => 'yes' === g.verified)) return 'yes';
+  return 'unknown';
 }

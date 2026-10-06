@@ -729,7 +729,11 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     env: () => withLinkedCredential(effectiveDeps, process.env),
     connected: () => 0 < bridge.sessions.count(),
     pick: (goal) => pickDriveSession(bridge.sessions.list(), goal),
-    drive: (goal, sessionId) => driveForChat(effectiveDeps, goal, sessionId),
+    drive: async (goal, sessionId) => {
+      const url = bridge.sessions.list().find((tab) => tab.sessionId === sessionId)?.url;
+      const outcome = await driveForChat(effectiveDeps, goal, sessionId);
+      return url === undefined ? outcome : { ...outcome, url };
+    },
     // The tab being driven, when this daemon launched it. A tab only the SDK reaches has no camera.
     frame: (sessionId) =>
       sessionId === undefined
