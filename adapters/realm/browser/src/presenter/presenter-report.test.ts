@@ -471,6 +471,20 @@ describe('a snapshot from the daemon, painted', () => {
     expect(wrap?.querySelector(`[${SYNC_BTN_ATTR}]`)).toBeNull();
   });
 
+  it('shows ten bugs at most, and offers the rest through sign-up when the project is not linked', () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ at: i, title: `bug ${String(i)}` }));
+    const box = document.createElement('div');
+    box.innerHTML = reportBodyHtml(scope({ calls: 30, failed: 14 }, many));
+    expect(box.querySelectorAll('.reticle-report-defect')).toHaveLength(10);
+    const all = box.querySelector('[data-reticle-defects-all]');
+    expect(all?.textContent).toContain('See all on the dashboard (14)');
+    // The same press as Sign in: it signs up, links this project and syncs what it caught.
+    expect(all?.hasAttribute('data-reticle-account-signin')).toBe(true);
+    // Ten caught, ten shown: nothing more to offer, so nothing is offered.
+    box.innerHTML = reportBodyHtml(scope({ calls: 30, failed: 10 }, many.slice(0, 10)));
+    expect(box.querySelector('[data-reticle-defects-all]')).toBeNull();
+  });
+
   it('escapes app-derived text on the way into the live DOM, not just in the string', () => {
     const { root, report } = mountPanel();
     report.setSnapshot(snapshotWith([{ at: 1, title: '<img src=x onerror=alert(1)>' }]));

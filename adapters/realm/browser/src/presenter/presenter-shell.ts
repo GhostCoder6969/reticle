@@ -55,7 +55,7 @@ const CHAT_MIN_LABEL = 'Minimise chat';
 const CHAT_PILL_LABEL = 'Open agent chat';
 /** The toolbar entry to the impact report. */
 const SETTINGS_LABEL = 'Settings';
-const AGENT_LOG_TITLE = 'Agent Log';
+const AGENT_LOG_TITLE = 'Reticle';
 const EXIT_LABEL = 'Exit';
 function paintPromo(
   root: HTMLElement,

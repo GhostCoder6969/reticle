@@ -109,6 +109,8 @@ export const REPORT_CSS = `
   display:inline-block;margin-top:8px;font-size:10px;color:var(--reticle-c-active);
   text-decoration:none;}
 [${REPORT_PANEL_ATTR}] .reticle-report-defects-more:hover{text-decoration:underline;}
+[${REPORT_PANEL_ATTR}] .reticle-report-defects-all{display:inline-block;margin-top:8px;border:0;padding:0;background:none;cursor:pointer;font:inherit;font-size:10.5px;font-weight:500;color:var(--reticle-c-active);}
+[${REPORT_PANEL_ATTR}] .reticle-report-defects-all:hover{text-decoration:underline;}
 [${REPORT_PANEL_ATTR}] .reticle-report-local-only{
   margin:14px 0 0;padding-top:10px;border-top:1px solid var(--reticle-line);
   color:var(--reticle-faint);font-size:10px;line-height:1.45;}

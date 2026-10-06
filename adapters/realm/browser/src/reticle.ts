@@ -24,6 +24,8 @@ import {
   NO_EDITS_OBSERVED,
   PresenterMode,
   CommandActor,
+  HudCorner,
+  HudVisibility,
   type CommandMessage,
   type HelloMessage,
   type RedactionConfig,
@@ -761,7 +763,17 @@ export class Reticle {
     if (command.name === ReticleCommand.SESSION_CONFIG) {
       const idleEndMs = command.args['idleEndMs'];
       if ('number' === typeof idleEndMs) this.#presenter?.setIdleEndMs(idleEndMs);
-      return { ok: true, result: { applied: this.#presenter !== undefined, idleEndMs } };
+      const hud = oneOf(HudVisibility, command.args['hud']);
+      const corner = oneOf(HudCorner, command.args['corner']);
+      const placed = this.#presenter?.placeHud(hud, corner) ?? [];
+      return {
+        ok: true,
+        result: {
+          applied: this.#presenter !== undefined,
+          idleEndMs,
+          ...(0 < placed.length ? { hud: placed } : {}),
+        },
+      };
     }
 
     // Bridge → browser presenter pushes (PRESENTER state echo / FLOWS replay list). The presenter owns
@@ -843,4 +855,9 @@ export class Reticle {
       p.log(LOG_KIND.READ, label, undefined, actor);
     }
   }
+}
+
+/** The value when it is one of the enum's, else undefined: a page never trusts a free string. */
+function oneOf<T extends Record<string, string>>(values: T, raw: unknown): T[keyof T] | undefined {
+  return (Object.values(values) as unknown[]).includes(raw) ? (raw as T[keyof T]) : undefined;
 }

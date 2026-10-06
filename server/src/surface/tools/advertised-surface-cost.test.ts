@@ -138,7 +138,12 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
  * With the coverage and crawl additions beside it (25_250 on their own), the two together measure
  * 25,451 to 25,459 B: 25_500.
  */
-const DEFAULT_SURFACE_BYTE_BUDGET = 25_500;
+/*
+ * 25_650 for `hud` on reticle_session tune (25,612 B measured): seven enum words that let an agent
+ * hide or move a HUD sitting over the control it has to test, which was otherwise untestable. The
+ * two parameters it started as were merged into one, and its description dropped, to get here.
+ */
+const DEFAULT_SURFACE_BYTE_BUDGET = 25_650;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
 // LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
@@ -282,7 +287,8 @@ describe('advertised surface cost', () => {
 // With `durable`, `app` and `exhaustive` beside `compare`, the two together measure 145,676 to
 // 145,684 B, inside 146_000.
 // 146_000 -> 146_400 for `push` on reticle_project and the query hint field (#1395): 146,174 B.
-const ALL_SURFACE_BYTE_BUDGET = 146_400;
+// 146_400 -> 146_600 for `hud` on reticle_session tune and its `hud` result.
+const ALL_SURFACE_BYTE_BUDGET = 146_600;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

@@ -229,6 +229,43 @@ export function applyDelta(
   };
 }
 
+/** The larger of two counters, key by key. */
+function maxEach<T extends Record<string, number>>(a: T, b: T): T {
+  const out = { ...a };
+  for (const key of Object.keys(b) as (keyof T)[])
+    out[key] = Math.max(a[key] ?? 0, b[key] ?? 0) as T[keyof T];
+  return out;
+}
+
+/**
+ * All time, never smaller than the project being looked at.
+ *
+ * The two scopes live in different files: the project's in its `.reticle`, the machine's in the
+ * home directory. A project whose history began before this machine's ledger (an upgrade, a new
+ * laptop, a moved checkout) showed more under "This project" than under "All time", which no reader
+ * can believe. The machine has done at least what any one of its projects has.
+ */
+export function atLeastProject(global: ImpactScope, project: ImpactScope): ImpactScope {
+  // The earlier of the two starts; zero is "never recorded", not the epoch.
+  const starts = [global.since, project.since].filter((t) => 0 < t);
+  return {
+    ...global,
+    counts: maxEach(global.counts, project.counts),
+    records: maxEach(global.records, project.records),
+    savings: {
+      tokens: {
+        ...global.savings.tokens,
+        value: Math.max(global.savings.tokens.value, project.savings.tokens.value),
+      },
+      minutes: {
+        ...global.savings.minutes,
+        value: Math.max(global.savings.minutes.value, project.savings.minutes.value),
+      },
+    },
+    since: 0 === starts.length ? 0 : Math.min(...starts),
+  };
+}
+
 /**
  * The live impact record for one project.
  *
@@ -346,7 +383,7 @@ export class ImpactStore {
     const snap: ImpactSnapshot = {
       schemaVersion: IMPACT_SCHEMA_VERSION,
       project: this.#project,
-      global: this.#global,
+      global: atLeastProject(this.#global, this.#project),
     };
     if (this.#projectName !== undefined) snap.projectName = this.#projectName;
     if (this.#dashboardUrl !== undefined) snap.dashboardUrl = this.#dashboardUrl;

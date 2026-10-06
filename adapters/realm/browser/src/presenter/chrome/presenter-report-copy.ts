@@ -71,6 +71,9 @@ export const REPORT_TEXT = {
   CHART: 'Verdicts, last 30 days',
   DEFECTS: 'What broke',
   DEFECTS_MORE: 'Manage all of them on the dashboard — triage, assign, and push to GitHub',
+  /** The way to every bug past the ten shown here, for a project not yet on the dashboard. */
+  DEFECTS_SEE_ALL: 'See all on the dashboard',
+  DEFECTS_SEE_ALL_TITLE: 'Sign up free, link this project, and see every bug Reticle caught',
   /**
    * The row link's accessible name and tooltip.
    *

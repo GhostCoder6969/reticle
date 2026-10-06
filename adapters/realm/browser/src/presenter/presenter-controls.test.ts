@@ -394,3 +394,19 @@ describe('presenter-controls / live-control panel', () => {
     ).toBe(true);
   });
 });
+
+describe('the replay row', () => {
+  it('has a See all that opens the Flows page', () => {
+    document.body.innerHTML = '';
+    const presenter = new Presenter({});
+    presenter.mount();
+    const flowsTab = document.querySelector<HTMLElement>('[data-reticle-chat-view-btn="flows"]');
+    let opened = false;
+    flowsTab?.addEventListener('click', () => {
+      opened = true;
+    });
+    document.querySelector<HTMLElement>('[data-reticle-flows-all]')?.click();
+    expect(opened).toBe(true);
+    presenter.destroy();
+  });
+});

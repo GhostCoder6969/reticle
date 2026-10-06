@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IMPACT_DEFECT_LIMIT, emptyImpactCounts } from '@reticlehq/core';
-import { ImpactStore, applyDelta, isoDay, readScope } from './impact-store.js';
+import { ImpactStore, applyDelta, atLeastProject, isoDay, readScope } from './impact-store.js';
 
 const DAY = 86_400_000;
 
@@ -300,5 +300,22 @@ describe('the notices in the snapshot', () => {
       notices: { read: () => [] },
     });
     expect(store.snapshot().notices).toBeUndefined();
+  });
+});
+
+describe('all time, beside one project', () => {
+  it('is never smaller than the project, even when the project kept history the machine did not', () => {
+    const now = Date.parse('2026-10-06T10:00:00');
+    const project = applyDelta(
+      scopeAt(now - 30 * DAY),
+      { calls: 40, verdicts: 12, failed: 3 },
+      now,
+    );
+    const global = applyDelta(scopeAt(now - DAY), { calls: 5, verdicts: 2 }, now);
+    const shown = atLeastProject(global, project);
+    expect(shown.counts.calls).toBe(40);
+    expect(shown.counts.verdicts).toBe(12);
+    expect(shown.counts.failed).toBe(3);
+    expect(shown.since).toBe(now - 30 * DAY);
   });
 });

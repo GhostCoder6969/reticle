@@ -1,5 +1,7 @@
 import {
   ActionType,
+  HudCorner,
+  HudVisibility,
   HumanControlKind,
   ReticleCommand,
   PresenterMode,
@@ -30,9 +32,18 @@ import {
 import { PRESENTER_CSS } from './presenter-styles.js';
 import { HudShell } from './presenter-shell.js';
 import { parseImpactSnapshot } from './chrome/presenter-report-copy.js';
+import { scheduleSyncDockLayout } from './presenter-dock-layout.js';
+import {
+  applyHudPosition,
+  clampHudPosition,
+  hudLayoutBox,
+  resetHudDockPosition,
+} from './presenter-hud-position.js';
 import {
   BorderMode,
   DEFAULT_BORDER_MODE,
+  DOCK_ATTR,
+  HIDDEN_UNTIL_RESTART_ATTR,
   DATA_BUSY,
   BUSY_OFF,
   effectivePaceMs,
@@ -595,6 +606,47 @@ export class Presenter {
       this.#heartbeatTimer = undefined;
     }
   }
+  /**
+   * Hide, remove, restore or move the HUD, for an agent whose test it is in the way of.
+   *
+   * The person can drag it or hide it from Settings; an agent had no way at all, so a HUD sitting
+   * over the control under test made that control untestable. Returns what was applied.
+   */
+  placeHud(visibility: HudVisibility | undefined, corner: HudCorner | undefined): string[] {
+    const root = this.#root;
+    if (root === undefined) return [];
+    const applied: string[] = [];
+    if (HudVisibility.REMOVED === visibility) {
+      this.destroy();
+      return [visibility];
+    }
+    if (HudVisibility.HIDDEN === visibility) root.setAttribute(HIDDEN_UNTIL_RESTART_ATTR, '1');
+    if (HudVisibility.SHOWN === visibility) root.removeAttribute(HIDDEN_UNTIL_RESTART_ATTR);
+    if (visibility !== undefined) applied.push(visibility);
+    const dock = root.querySelector(`[${DOCK_ATTR}]`);
+    if (corner !== undefined && dock instanceof HTMLElement) {
+      if (HudCorner.BOTTOM_RIGHT === corner) resetHudDockPosition(dock);
+      else {
+        const box = hudLayoutBox(dock);
+        const left = corner.endsWith('left') ? 0 : window.innerWidth;
+        const top = corner.startsWith('top') ? 0 : window.innerHeight;
+        const at = clampHudPosition(
+          left,
+          top,
+          box.width,
+          box.height,
+          window.innerWidth,
+          window.innerHeight,
+        );
+        applyHudPosition(dock, at.left, at.top);
+      }
+      applied.push(corner);
+      // Which side the panel opens on follows where the HUD now sits, as it does after a drag.
+      scheduleSyncDockLayout(dock, root);
+    }
+    return applied;
+  }
+
   /** Agent-tunable idle-end window (reticle_session). Floored so it can't be set uselessly small. */
   setIdleEndMs(ms: number): void {
     if (!Number.isFinite(ms)) return;

@@ -34,3 +34,23 @@ export const HudToggle = {
   OFF: 'off',
 } as const;
 export type HudToggle = (typeof HudToggle)[keyof typeof HudToggle];
+
+/**
+ * What an agent may do with the HUD when it sits over what it has to test (reticle_session tune).
+ * `removed` takes it off the page until the next reload; `hidden` keeps it ready to come back.
+ */
+export const HudVisibility = {
+  SHOWN: 'shown',
+  HIDDEN: 'hidden',
+  REMOVED: 'removed',
+} as const;
+export type HudVisibility = (typeof HudVisibility)[keyof typeof HudVisibility];
+
+/** The corner an agent can move the HUD to; `bottom-right` is where it docks by default. */
+export const HudCorner = {
+  TOP_LEFT: 'top-left',
+  TOP_RIGHT: 'top-right',
+  BOTTOM_LEFT: 'bottom-left',
+  BOTTOM_RIGHT: 'bottom-right',
+} as const;
+export type HudCorner = (typeof HudCorner)[keyof typeof HudCorner];

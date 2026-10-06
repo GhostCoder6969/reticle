@@ -200,7 +200,7 @@ describe('presenter HUD shell', { timeout: HUD_MOUNT_TIMEOUT_MS }, () => {
     p.mount();
     const panel = document.querySelector('[data-reticle-chat-panel]');
     // The title is in the header, not a row of its own.
-    expect(panel?.querySelector('.reticle-chat-head')?.textContent).toContain('Agent Log');
+    expect(panel?.querySelector('.reticle-chat-head')?.textContent).toContain('Reticle');
     expect(panel?.querySelector('.reticle-view-heading')).toBeNull();
     // "Session ended" replaces the status text inside the status row rather than adding a row.
     expect(panel?.querySelector('.reticle-act-strip [data-reticle-banner]')).not.toBeNull();

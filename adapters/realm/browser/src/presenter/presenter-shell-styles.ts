@@ -112,6 +112,10 @@ export const SHELL_CSS = `
 [${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}],
 [${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] [data-reticle-log]{
   pointer-events:none;}
+/* ...except a log with more than it shows: a feed nobody can scroll back through is not a log. */
+[${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] [data-reticle-log][data-reticle-log-scrollable],
+[${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] .reticle-flow-strip{
+  pointer-events:auto;}
 [${OVERLAY}][data-reticle-mode="idle"][data-reticle-block="0"] [${CHAT_PANEL}] :is(button,a,input,select,textarea){
   pointer-events:auto;}
 /**

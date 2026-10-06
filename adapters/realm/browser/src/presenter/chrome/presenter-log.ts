@@ -148,7 +148,15 @@ export const LOG_CSS = `
  */
 function scrollLogToLatest(container: HTMLElement): void {
   container.scrollTop = container.scrollHeight;
+  // A log with more than fits must take the wheel, even while the card lets clicks through (#992).
+  container.toggleAttribute(
+    LOG_SCROLLABLE_ATTR,
+    container.scrollHeight > container.clientHeight + 1,
+  );
 }
+
+/** Set while the log holds more than it shows, so it keeps scrolling when the card is click-through. */
+export const LOG_SCROLLABLE_ATTR = 'data-reticle-log-scrollable';
 
 /**
  * Pin the feed to its newest row once the panel has actually laid out.

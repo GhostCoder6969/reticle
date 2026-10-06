@@ -58,6 +58,11 @@ const PLAIN_CONTROLS = [
   'workspace-copy',
   'mark-cancel',
   'mark-send',
+  // The Agent Log's own Harness switch; the Settings one is `setting.harnessEnabled`.
+  'harness-switch',
+  // "See all" beside the Agent Log's replay row, and below Impact's recent bugs.
+  'flows-all',
+  'defects-all',
 ] as const;
 
 /** The attributes whose value is part of the id. Read by the browser to build one. */

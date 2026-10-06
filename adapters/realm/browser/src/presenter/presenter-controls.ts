@@ -30,6 +30,7 @@ const ENDED_BANNER_TEXT = 'Session ended';
 const COPY_LABEL = 'Copy run';
 const EXPORT_LABEL = 'Export';
 const FLOWS_LABEL = 'Replay a flow';
+const FLOWS_ALL_LABEL = 'See all';
 const COPIED_TEXT = 'Copied ✓';
 /** Download filename for the exported run state. */
 const RUN_FILENAME = 'reticle-run.json';
@@ -126,8 +127,12 @@ export const CONTROLS_CSS = `
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.22);}
 [data-reticle-chat-panel] .reticle-flows{display:none;flex:none;min-width:0;padding:8px 12px;border-top:1px solid var(--reticle-line2);pointer-events:auto;}
 [data-reticle-chat-panel] .reticle-flows[data-has="1"]{display:block;}
-[data-reticle-chat-panel] .reticle-flows-cap{display:block;margin-bottom:5px;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;}
-[data-reticle-chat-panel] .reticle-flow-strip{display:flex;gap:6px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;overscroll-behavior-inline:contain;}
+[data-reticle-chat-panel] .reticle-flows-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px;}
+[data-reticle-chat-panel] .reticle-flows-all{border:0;padding:0;background:none;cursor:pointer;color:var(--reticle-c-active);font:inherit;font-size:10.5px;font-weight:500;}
+[data-reticle-chat-panel] .reticle-flows-all:hover{text-decoration:underline;}
+[data-reticle-chat-panel] .reticle-flows-cap{display:block;color:var(--reticle-faint);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;}
+[data-reticle-chat-panel] .reticle-flow-strip{display:flex;gap:6px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-inline:contain;pointer-events:auto;}
+[data-reticle-chat-panel] .reticle-flow-strip::-webkit-scrollbar{display:none;}
 [data-reticle-chat-panel] .reticle-flow-strip .reticle-flow{flex:none;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 [data-reticle-chat-panel] .reticle-all-flows{flex:1;min-height:0;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;align-items:stretch;gap:5px;}
 [data-reticle-chat-panel] .reticle-all-flows .reticle-flow{width:100%;height:auto;min-height:32px;text-align:left;justify-content:flex-start;}
@@ -178,7 +183,7 @@ export const CONTROLS_BANNER_HTML = `<div data-reticle-banner class="reticle-ban
  */
 export const CONTROLS_MARKS_HTML = `<div ${MARKS_ROW_ATTR} class="reticle-marks-row" hidden><span data-reticle-marks-text class="reticle-marks-text"></span><button type="button" ${COPY_MARKS_ATTR} class="reticle-marks-copy" title="${COPY_MARKS_LABEL}">${hiIconHtml(PresenterIcon.COPY, PRESENTER_ICON_SIZE.HELP)}<span>${COPY_MARKS_LABEL}</span></button></div>`;
 /** Replay-a-flow row (between log and footer); buttons are filled in by setFlows once flows arrive. */
-export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><span class="reticle-flows-cap">${FLOWS_LABEL}</span><div data-reticle-flow-strip class="reticle-flow-strip"></div></div>`;
+export const CONTROLS_FLOWS_HTML = `<div data-reticle-flows class="reticle-flows"><div class="reticle-flows-head"><span class="reticle-flows-cap">${FLOWS_LABEL}</span><button type="button" data-reticle-flows-all class="reticle-flows-all">${FLOWS_ALL_LABEL} →</button></div><div data-reticle-flow-strip class="reticle-flow-strip"></div></div>`;
 /**
  * Footer markup: the workspace row.
  *
@@ -306,6 +311,25 @@ export class ControlPanel {
     };
     for (const container of [this.#refs.flows, this.#refs.allFlows])
       container?.addEventListener('click', onReplay, { signal });
+    // The strip's scrollbar is hidden, so a mouse with only a vertical wheel scrolls it sideways.
+    this.#refs.flows?.querySelector<HTMLElement>('[data-reticle-flow-strip]')?.addEventListener(
+      'wheel',
+      (e) => {
+        const strip = e.currentTarget as HTMLElement;
+        if (0 !== e.deltaX || strip.scrollWidth <= strip.clientWidth) return;
+        strip.scrollLeft += e.deltaY;
+        e.preventDefault();
+      },
+      { signal, passive: false },
+    );
+    // "See all" opens the Flows page through its own tab, so the page opens exactly as it does there.
+    this.#refs.flows
+      ?.querySelector('[data-reticle-flows-all]')
+      ?.addEventListener(
+        'click',
+        () => root.querySelector<HTMLElement>('[data-reticle-chat-view-btn="flows"]')?.click(),
+        { signal },
+      );
     this.#refs.copyBtn?.addEventListener('click', () => this.#onCopy(), { signal });
     this.#refs.exportBtn?.addEventListener('click', () => this.#onExport(), { signal });
     this.#workspaceTeardown = mountWorkspaceSelector(root);

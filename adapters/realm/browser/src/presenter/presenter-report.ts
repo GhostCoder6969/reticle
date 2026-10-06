@@ -159,9 +159,15 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
     .join('');
   // Only claim there are more when there actually are — `counts.failed` is every defect ever, and
   // this list is the recent tail of it.
+  // Not linked, and more caught than shown: the same button as Sign in, so one press signs up, links
+  // this project and syncs its history, and the dashboard it opens on holds every one of them. With
+  // nothing more to show there is nothing to offer, and the list stays an answer, not an advert.
+  const hidden = scope.counts.failed > list.length;
   const more = !linked
-    ? ''
-    : `<a class="reticle-report-defects-more" data-reticle-link="dashboard" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${scope.counts.failed > list.length ? ` (${String(scope.counts.failed)})` : ''}</a>`;
+    ? !hidden
+      ? ''
+      : `<button type="button" data-reticle-defects-all ${ACCOUNT_SIGNIN_ATTR} class="reticle-report-defects-all" title="${REPORT_TEXT.DEFECTS_SEE_ALL_TITLE}">${REPORT_TEXT.DEFECTS_SEE_ALL} (${String(scope.counts.failed)}) →</button>`
+    : `<a class="reticle-report-defects-more" data-reticle-link="dashboard" href="${esc(dashboardUrl)}" target="_blank" rel="noreferrer noopener">${REPORT_TEXT.DEFECTS_MORE}${hidden ? ` (${String(scope.counts.failed)})` : ''}</a>`;
   /*
    * The push control, beside the heading of the section it pushes.
    *
