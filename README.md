@@ -278,11 +278,20 @@ Faster for a structural reason rather than a browser-speed one: a time-gated tra
 
 ---
 
-## On the roadmap
+## The open-source tool, the Harness, and the dashboard
 
-**Routing verification flows with [TypeSafe AI](https://typesafe.ai)'s [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev).** A verification run makes a lot of small decisions — is this page settled, is this finding worth chasing, does this failure warrant a full capture — and today an LLM answers each one at LLM latency and LLM cost. Jev is a System One model: it returns a typed, probabilistic choice from a fixed set instead of prose, in 70–500ms. That is the exact shape of a routing decision inside Reticle's infra, so when we build that layer, Jev is what decides which flow a run takes. That layer is the roadmap item; it does not ship yet.
+**The open-source tool is the whole verify loop, on your machine.** The SDK in your app, the local daemon, the MCP tools your agent calls, and the HUD in the corner of your page where you watch it work: what the agent is doing, every verdict, the flows it saved, the notes you pin on the page. No account, and nothing from your app leaves your machine.
 
-What DOES ship, since 3.2.0, is Jev driving the app rather than routing inside it: `reticle_verify { action: "explore", driver: "jev" }` explores a page by selecting from candidates Reticle enumerated off the DOM, so the model chooses and never composes. See [docs/autodrive.md](docs/autodrive.md).
+**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_) and the Harness drives it in your browser, proves each step, and saves what it drove as flows that replay with no model at all. Your agent spends one call instead of a context full of snapshots: on our explore benchmark the caller used 11.9× fewer tokens for the same verdict. It runs on [TypeSafe AI](https://typesafe.ai)'s [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev), a System One model built for fast, typed choices. You watch it in the HUD as it happens ("Reticle Harness is driving"), and you can switch it off mid-run from the same panel. Call it with `reticle_verify { action: "explore", persona: "…" }`; see [docs/autodrive.md](docs/autodrive.md).
+
+**[app.reticle.sh](https://app.reticle.sh) is the dashboard.** Run `reticle connect` in your app, sign in, and everything your machine verified syncs on its own, whichever agent did the driving:
+
+- every run, with what was checked, what held, and who drove it (your agent or the Harness)
+- the bugs Reticle caught, to triage, assign, and push to GitHub
+- saved flows, Reticle Coverage (routes reached, controls proved), and the notes people pinned in the HUD
+- a team view of all of it, and a shareable proof link for any run
+
+The open-source tool never needs the dashboard. The dashboard is where a team sees what its agents proved, and where the Harness comes with a plan or trial.
 
 ## Docs
 
