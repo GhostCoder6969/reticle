@@ -65,6 +65,9 @@ const PLAIN_CONTROLS = [
   'defects-all',
   // "See the logs" beside a replay the person started from a chip.
   'see-logs',
+  // The Harness plan board on the Agent Log: hide it, or open one journey's steps.
+  'plan-close',
+  'plan-journey',
 ] as const;
 
 /** The attributes whose value is part of the id. Read by the browser to build one. */

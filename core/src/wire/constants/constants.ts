@@ -952,6 +952,8 @@ export const ReticleCommand = {
   FLOWS: 'flows',
   /** Bridge → browser: a HUD replay's progress, `{ name, done, total, status }`. */
   FLOW_PROGRESS: 'flow.progress',
+  /** Bridge → browser: the Harness's drive plan and each part's status, a `PlanView`. */
+  PLAN: 'plan',
 } as const;
 export type ReticleCommand = (typeof ReticleCommand)[keyof typeof ReticleCommand];
 

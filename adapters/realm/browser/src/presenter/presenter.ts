@@ -94,6 +94,7 @@ import {
 import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
 import { installHudTelemetry } from './hud-telemetry.js';
+import { PLAN_HTML, PlanBoard, parsePlanView } from './presenter-plan.js';
 
 /** How long the copy button shows it worked. */
 const COPIED_FLASH_MS = 1600;
@@ -147,6 +148,7 @@ export class Presenter {
   // v2: narration + action status accumulate in a persistent, timestamped, scrollable log.
   #logMax: number;
   #log: HTMLElement | undefined;
+  #plan = new PlanBoard();
   /** now of the first row, the baseline for the +elapsed timestamps. */
   #logBaseMs: number | undefined;
   // Live-control panel: the two-way control surface (Pause/Resume + End + message Send).
@@ -235,6 +237,11 @@ export class Presenter {
     const a = command.args;
     if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
     if (command.name === ReticleCommand.FLOW_PROGRESS) return void this.#panel.setFlowProgress(a);
+    if (command.name === ReticleCommand.PLAN) {
+      const view = parsePlanView(a);
+      if (view !== undefined) this.#plan.paint(view);
+      return;
+    }
     if (command.name === ReticleCommand.IMPACT) {
       const snapshot = parseImpactSnapshot(a['snapshot']);
       if (snapshot !== undefined) {
@@ -290,7 +297,7 @@ export class Presenter {
       <div data-reticle-glow></div>
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
-      ${HudShell.dockHtml(actStrip, '', DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
+      ${HudShell.dockHtml(actStrip, PLAN_HTML, DATA_RETICLE_LOG, CONTROLS_MARKS_HTML + CONTROLS_FLOWS_HTML, CONTROLS_FOOT_HTML)}`;
     document.body.appendChild(root);
     this.#root = root;
     this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;
@@ -311,6 +318,7 @@ export class Presenter {
     this.#glowCtl.setElements(this.#glow, this.#cursor);
     // The panel queries its refs, binds listeners, and paints the initial active state.
     this.#panel.mount(root, this.#glow);
+    this.#plan.mount(root);
     if (this.#onHudUse !== undefined) {
       this.#hudTelemetryTeardown = installHudTelemetry(document, root, this.#onHudUse);
     }

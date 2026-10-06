@@ -26,6 +26,7 @@ import {
   type FlowStepResult,
   type ReticleEvent,
   PredicateKind,
+  ReplayStatus,
 } from '@reticlehq/core';
 import { asString, isConsequenceDrift } from '@reticlehq/core';
 import { anchorFieldName } from './fields/flow-secret-field.js';
@@ -370,6 +371,16 @@ export interface ReplayFromOptions {
    */
   from?: number | string;
   /**
+   * Stop before this step index: drive the journey only as far as a point, such as a dialog that
+   * several journeys branch from. Absent means the whole flow.
+   */
+  to?: number;
+  /**
+   * Continue at this step on the page as it is: earlier steps are not driven at all, because the
+   * caller already drove an identical prefix (another flow replayed `to` this step).
+   */
+  at?: number;
+  /**
    * How to load a flow this one INVOKES. Absent means invocations cannot be followed.
    *
    * A composite whose sub-flow cannot be loaded must FAIL and say so. It must not be reported as a
@@ -411,6 +422,21 @@ export function resumeIndex(
   const at = 'number' === typeof from ? from : steps.findIndex((step) => step.id === from);
   if (at < 0 || at >= steps.length || !Number.isInteger(at)) return undefined;
   return steps.slice(0, at).some((step) => StepEffect.COMMITS === step.effect) ? 0 : at;
+}
+
+/** How far a replay drives: `to` stops before a step, `at` picks up at one. Positive indices only. */
+export function replayWindow(args: Record<string, unknown>): { to?: number; at?: number } {
+  const index = (raw: unknown): number | undefined =>
+    'number' === typeof raw && Number.isInteger(raw) && 0 < raw ? raw : undefined;
+  const to = index(args['to']);
+  const at = index(args['at']);
+  return { ...(to === undefined ? {} : { to }), ...(at === undefined ? {} : { at }) };
+}
+
+/** A part-way replay's status, from the steps it drove. */
+export function partialStatus(steps: readonly FlowStepResult[]): ReplayStatus {
+  if (steps.some((step) => step.drift !== undefined)) return ReplayStatus.DRIFT;
+  return steps.every((step) => step.ok) ? ReplayStatus.OK : ReplayStatus.ERROR;
 }
 
 /** The `from` argument, narrowed: a step index or a step id. */
@@ -474,7 +500,7 @@ async function runInvokeStep(
   // `from` is an offset into the CALLER's steps. A sub-journey invoked from the setup prefix runs
   // whole and unchecked (from = its length); one invoked at or after the resume point runs normally.
   // Nor the progress callback: a sub-flow's steps are one step of the flow the chip is drawing.
-  const { from: _outer, onStep: _progress, ...rest } = options;
+  const { from: _outer, onStep: _progress, to: _to, at: _at, ...rest } = options;
   const carried = setup ? { ...rest, from: sub.steps.length } : rest;
   const nested = await replayFlow(
     session,
@@ -542,6 +568,11 @@ export async function replayFlow(
   };
   try {
     for (const step of flow.steps) {
+      if (options.to !== undefined && index >= options.to) break;
+      if (options.at !== undefined && index < options.at) {
+        index += 1;
+        continue;
+      }
       if (step.invoke !== undefined) {
         results.push(
           await runInvokeStep(

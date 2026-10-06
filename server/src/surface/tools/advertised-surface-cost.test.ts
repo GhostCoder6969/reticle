@@ -292,7 +292,9 @@ describe('advertised surface cost', () => {
 // session-bound ones (149,138 B measured). runTool adds `next` and the one-shot keys to any result,
 // and a strict session-exempt schema rejected the call outright. The default surface sends no
 // output schemas, so this costs nothing there.
-const ALL_SURFACE_BYTE_BUDGET = 149_200;
+// 149_200 -> 149_500 for `to` and `at` on reticle_flow_replay (149,437 B): replaying up to a point
+// and continuing from it is how a drive plan branches without re-driving the shared steps.
+const ALL_SURFACE_BYTE_BUDGET = 149_500;
 
 describe('the output-schema surface is budgeted too', () => {
   it(`fits in ${String(ALL_SURFACE_BYTE_BUDGET)} bytes of tools/list`, async () => {

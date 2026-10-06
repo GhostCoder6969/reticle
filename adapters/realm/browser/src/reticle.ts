@@ -783,6 +783,7 @@ export class Reticle {
       command.name === ReticleCommand.PRESENTER ||
       command.name === ReticleCommand.FLOWS ||
       command.name === ReticleCommand.FLOW_PROGRESS ||
+      command.name === ReticleCommand.PLAN ||
       command.name === ReticleCommand.IMPACT
     ) {
       if (this.#presenter === undefined) {

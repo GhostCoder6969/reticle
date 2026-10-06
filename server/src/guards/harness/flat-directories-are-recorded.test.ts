@@ -76,7 +76,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // and a `promo/` directory holding exactly one file would be a category invented for a single member.
   // 20 since `hud-telemetry.ts`: the one listener that names every HUD press. It reads the presenter's
   // own root attributes and every surface's controls, so it sits with the surfaces it watches.
-  'adapters/realm/browser/src/presenter': 23,
+  // 24 with `presenter-plan.ts`, the Harness plan board on the Agent Log: one surface, with its own
+  // stylesheet, beside the others.
+  'adapters/realm/browser/src/presenter': 24,
   // Newly over the line at 11, with `presenter-safe-html.ts`. It crossed because two SECURITY
   // helpers left `presenter-report.ts` when the account capsule became their second caller: HTML
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a
@@ -128,8 +130,11 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * exactly one byte, which is how we learned the cost was the schema and not the constant -- but a
    * leaf the browser can import without the schemas is still the right shape, and the guard's
    * ceiling was raised with that reasoning written beside it.
+   *
+   * 17 with `drive-script.ts`, the Harness's plan language: an artifact the daemon and the platform
+   * both read, so it lives with the other formats, behind the artifacts subpath the SDK never loads.
    */
-  'core/src/artifacts': 16,
+  'core/src/artifacts': 17,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   'core/src': 11,
@@ -202,7 +207,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // overflowed it is declared beside it rather than squeezed out of its own description.
   // 42 with `next-step.ts`: the one line every tool result carries about what to do next. It is
   // read where the envelope is assembled, in `invoke-tool.ts`, beside the other envelope sources.
-  'server/src/surface/tools': 42,
+  // 43 with `harness-script.ts`: the planned drive, split from `harness-explore.ts` at its line cap.
+  // It binds the plan's ports to the tool surface, which is why it sits here and not in `script/`.
+  'server/src/surface/tools': 43,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

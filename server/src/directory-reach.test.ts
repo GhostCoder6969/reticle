@@ -696,6 +696,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   'page-commands': [],
   // The platform's side of the Harness: a driver for the loop next door, and nothing else.
   platform: ['harness'],
+  // The Harness's drive plan: planned from flows, run lane by lane through the loop next door.
+  // Handed its browser, model and tools as ports, so like `harness` it reaches nothing else.
+  script: ['harness'],
   tools: [
     // A lease that never dialled reads the served page's CSP, the same reader doctor uses.
     'dev-server',
@@ -732,6 +735,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'harness',
     // The platform's Harness driver, chosen with the local ones when a drive is built.
     'platform',
+    // The drive plan, planned and run when no journey is named.
+    'script',
     'impact',
     'input',
     'intent',

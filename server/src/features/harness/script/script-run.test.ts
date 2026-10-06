@@ -1,0 +1,200 @@
+import { describe, expect, it } from 'vitest';
+import { ReplayStatus, ReticleTool, ScriptStatus, Verified } from '@reticlehq/core';
+import { DriveScriptSchema, type DriveScript } from '@reticlehq/core/artifacts';
+import { runScript, type ScriptPorts } from './script-run.js';
+import { StopReason, type HarnessResult, type HarnessToolset } from '../harness.js';
+
+interface Call {
+  lane: string | undefined;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/** Ports over a fake app: `failing` flows replay red, `absent` predicates do not hold. */
+function fakePorts(options: { failing?: string[]; absent?: string[]; parallel?: number } = {}) {
+  const calls: Call[] = [];
+  let live = 0;
+  let peak = 0;
+  let released = 0;
+  let drives = 0;
+  let stop = false;
+  const ports: ScriptPorts = {
+    parallel: options.parallel ?? 4,
+    stopped: () => stop,
+    async lease(laneId) {
+      live += 1;
+      peak = Math.max(peak, live);
+      await new Promise((r) => setTimeout(r, 5));
+      return {
+        sessionId: laneId,
+        release: () => {
+          live -= 1;
+          released += 1;
+          return Promise.resolve();
+        },
+      };
+    },
+    toolset(sessionId): HarnessToolset {
+      return {
+        tools: [],
+        async invoke(name, args) {
+          calls.push({ lane: sessionId, name, args });
+          await new Promise((r) => setTimeout(r, 2));
+          if (ReticleTool.FLOW_REPLAY === name) {
+            const failed = true === options.failing?.includes(String(args['flowName']));
+            return { status: failed ? ReplayStatus.DRIFT : ReplayStatus.OK };
+          }
+          if (ReticleTool.ASSERT === name) {
+            const value = String(
+              (args['predicate'] as { query?: { testid?: string } }).query?.testid,
+            );
+            return { pass: !(options.absent ?? []).includes(value) };
+          }
+          return { verified: Verified.YES };
+        },
+      };
+    },
+    drive(): Promise<HarnessResult> {
+      drives += 1;
+      return Promise.resolve({
+        stopReason: StopReason.FINISHED,
+        summary: '',
+        steps: 1,
+        toolCalls: [],
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        proved: true,
+      });
+    },
+  };
+  return {
+    ports,
+    calls,
+    stats: () => ({ peak, released, drives }),
+    stopNow: () => {
+      stop = true;
+    },
+  };
+}
+
+const script = (raw: unknown): DriveScript => DriveScriptSchema.parse(raw);
+const replay = (flow: string): { kind: 'replay'; flow: string } => ({ kind: 'replay', flow });
+
+const twoLanes = script({
+  version: 1,
+  source: 'local',
+  journeys: [
+    { id: 'signin', title: 'Sign in', steps: [replay('signin')] },
+    { id: 'refund', title: 'Refund', dependsOn: ['signin'], steps: [replay('refund')] },
+    { id: 'settings', title: 'Settings', dependsOn: ['signin'], steps: [replay('settings')] },
+    { id: 'audit', title: 'Audit', dependsOn: ['refund'], steps: [replay('audit')] },
+  ],
+  lanes: [
+    { id: 'A', journeys: ['signin', 'refund'] },
+    { id: 'B', journeys: ['signin', 'settings', 'audit'] },
+  ],
+});
+
+describe('running a drive script', () => {
+  it('runs lanes at the same time, each in its own context, and releases every lease', async () => {
+    const fake = fakePorts();
+    const run = await runScript(twoLanes, fake.ports);
+    expect(fake.stats().peak).toBe(2);
+    expect(fake.stats().released).toBe(2);
+    expect(run.view.lanes.flatMap((l) => l.journeys.map((j) => j.status))).toEqual(
+      Array(5).fill(ScriptStatus.PASSED),
+    );
+    // An exact plan never pays a model.
+    expect(fake.stats().drives).toBe(0);
+    expect(run.toolCalls).toHaveLength(5);
+  });
+
+  it('a failure blocks the rest of its lane and every journey waiting on it from another lane', async () => {
+    const fake = fakePorts({ failing: ['refund'] });
+    const run = await runScript(twoLanes, fake.ports);
+    const status = Object.fromEntries(
+      run.view.lanes.flatMap((l) => l.journeys.map((j) => [`${l.id}/${j.id}`, j.status])),
+    );
+    expect(status).toEqual({
+      'A/signin': ScriptStatus.PASSED,
+      'A/refund': ScriptStatus.FAILED,
+      'B/signin': ScriptStatus.PASSED,
+      'B/settings': ScriptStatus.PASSED,
+      'B/audit': ScriptStatus.BLOCKED,
+    });
+    expect(fake.calls.some((c) => 'audit' === c.args['flowName'])).toBe(false);
+  });
+
+  it('re-enters the checkpoint before every branch case after the first, and skips a case whose condition fails', async () => {
+    const fake = fakePorts({ absent: ['otp-input'] });
+    const branching = script({
+      version: 1,
+      source: 'local',
+      journeys: [
+        {
+          id: 'refund',
+          title: 'Refund',
+          steps: [
+            { kind: 'replay', flow: 'refund', to: 3 },
+            { kind: 'checkpoint', id: 'dialog', reenter: { flow: 'refund', to: 3 } },
+            {
+              kind: 'branch',
+              at: 'dialog',
+              cases: [
+                { label: 'full', steps: [{ kind: 'replay', flow: 'refund', at: 3 }] },
+                { label: 'partial', steps: [{ kind: 'act', goal: 'refund part' }] },
+                {
+                  label: '2FA',
+                  when: { kind: 'element', testid: 'otp-input' },
+                  steps: [{ kind: 'act', goal: 'enter the code' }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      lanes: [{ id: 'A', journeys: ['refund'] }],
+    });
+    const run = await runScript(branching, fake.ports);
+    expect(fake.calls.map((c) => [c.name, c.args['to'] ?? c.args['at'] ?? ''])).toEqual([
+      [ReticleTool.FLOW_REPLAY, 3],
+      [ReticleTool.FLOW_REPLAY, 3],
+      [ReticleTool.FLOW_REPLAY, 3],
+      [ReticleTool.FLOW_REPLAY, 3],
+      [ReticleTool.ASSERT, ''],
+    ]);
+    // `partial` reached the model; `2FA` did not, because its condition did not hold.
+    expect(fake.stats().drives).toBe(1);
+    expect(run.view.lanes[0]?.journeys[0]?.status).toBe(ScriptStatus.PASSED);
+  });
+
+  it('switching autonomous driving off stops every lane', async () => {
+    const fake = fakePorts({ parallel: 1 });
+    let seen = 0;
+    const run = await runScript(twoLanes, fake.ports, () => {
+      seen += 1;
+      if (3 === seen) fake.stopNow();
+    });
+    expect(run.stopped).toBe(true);
+    expect(fake.stats().released).toBe(1);
+    expect(run.view.lanes[1]?.journeys.every((j) => ScriptStatus.BLOCKED === j.status)).toBe(true);
+  });
+});
+
+describe('a lane that breaks', () => {
+  it('blocks what it had not finished and says why', async () => {
+    const fake = fakePorts();
+    const ports: ScriptPorts = {
+      ...fake.ports,
+      lease: (laneId) =>
+        'B' === laneId
+          ? Promise.reject(new Error('no browser could start'))
+          : fake.ports.lease(laneId),
+    };
+    const run = await runScript(twoLanes, ports);
+    expect(run.view.lanes[1]?.journeys.map((j) => j.status)).toEqual(
+      Array(3).fill(ScriptStatus.BLOCKED),
+    );
+    expect(run.lines.join('\n')).toContain('blocked (no browser could start)');
+    expect(run.view.lanes[0]?.journeys.every((j) => ScriptStatus.PASSED === j.status)).toBe(true);
+  });
+});

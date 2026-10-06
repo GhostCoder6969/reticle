@@ -1,4 +1,4 @@
-import { FlowProgressStatus, ReplayStatus } from '@reticlehq/core';
+import { FlowProgressStatus, ReplayStatus, ReticleCommand } from '@reticlehq/core';
 import type { FlowReplayResult } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { replayAndLearn } from './flow-learning.js';
@@ -6,7 +6,7 @@ import { replayAndLearn } from './flow-learning.js';
 /** The session a HUD replay reports to. Resolved per message: a replay usually reloads the page. */
 interface ProgressTarget {
   pushNarration(text: string): void;
-  pushFlowProgress(progress: Record<string, unknown>): void;
+  pushView(name: typeof ReticleCommand.FLOW_PROGRESS, args: object): void;
 }
 
 /** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored / ? unverifiable. */
@@ -34,7 +34,12 @@ export async function replayFromHud(
   flowName: string,
 ): Promise<void> {
   const progress = (done: number, total: number, status: FlowProgressStatus): void =>
-    resolve(sessionId)?.pushFlowProgress({ name: flowName, done, total, status });
+    resolve(sessionId)?.pushView(ReticleCommand.FLOW_PROGRESS, {
+      name: flowName,
+      done,
+      total,
+      status,
+    });
   resolve(sessionId)?.pushNarration(`▶ Replaying "${flowName}"…`);
   progress(0, 0, FlowProgressStatus.PLAYING);
   let total = 0;

@@ -62,3 +62,34 @@ export const FlowProgressStatus = {
   FAILED: 'failed',
 } as const;
 export type FlowProgressStatus = (typeof FlowProgressStatus)[keyof typeof FlowProgressStatus];
+
+/** Where one part of a Harness drive plan stands. */
+export const ScriptStatus = {
+  PENDING: 'pending',
+  RUNNING: 'running',
+  PASSED: 'passed',
+  FAILED: 'failed',
+  /** Never started: something it needed failed. */
+  BLOCKED: 'blocked',
+  /** A branch case whose condition did not hold. Not a failure. */
+  NOT_TAKEN: 'not-taken',
+} as const;
+export type ScriptStatus = (typeof ScriptStatus)[keyof typeof ScriptStatus];
+
+/** The HUD's picture of a drive plan: lanes side by side, journeys in order, steps inside. */
+export interface PlanView {
+  /** Lanes that may run at once. */
+  parallel: number;
+  lanes: {
+    id: string;
+    journeys: {
+      id: string;
+      title: string;
+      persona?: string;
+      /** Journeys in earlier lanes this one waits on. */
+      waitsOn: string[];
+      status: ScriptStatus;
+      steps: { label: string; status: ScriptStatus }[];
+    }[];
+  }[];
+}

@@ -19,3 +19,4 @@ export * from '@/verdict/instrumentation-gap.js';
 export * from '@/words/upgrade.js';
 export * from './journal.js';
 export * from './prompt-context.js';
+export * from './drive-script.js';

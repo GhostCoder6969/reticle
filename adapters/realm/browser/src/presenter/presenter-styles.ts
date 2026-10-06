@@ -10,6 +10,7 @@ import { OFFER_CSS } from './carousel/offer-card.js';
 import { TALK_CSS } from './carousel/talk-card.js';
 import { CAROUSEL_CSS } from './carousel/carousel.js';
 import { CHAT_VIEWS_CSS } from './presenter-chat-views.js';
+import { PLAN_CSS } from './presenter-plan.js';
 import { FRAME_CSS } from './presenter-frame.js';
 import { PRESENTER_DESIGN_TOKENS_CSS } from './presenter-design-tokens.js';
 /**
@@ -81,5 +82,6 @@ ${TALK_CSS}
 ${CAROUSEL_CSS}
 ${LOG_CSS}
 ${CHAT_VIEWS_CSS}
+${PLAN_CSS}
 ${CONTROLS_CSS}
 ${FRAME_CSS}`;

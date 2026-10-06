@@ -905,9 +905,12 @@ export class Session implements HandshakeFacts {
     this.#post(ReticleCommand.NARRATE, { text, level: 'info' });
   }
 
-  /** A HUD replay's progress, for the chip that started it. */
-  pushFlowProgress(progress: Record<string, unknown>): void {
-    this.#post(ReticleCommand.FLOW_PROGRESS, progress);
+  /** A HUD replay's progress, or the Harness's drive plan: pictures the HUD redraws as they change. */
+  pushView(
+    name: typeof ReticleCommand.FLOW_PROGRESS | typeof ReticleCommand.PLAN,
+    args: object,
+  ): void {
+    this.#post(name, { ...args });
   }
 
   /** The one-time lease block on the first agent command, then undefined forever after. */

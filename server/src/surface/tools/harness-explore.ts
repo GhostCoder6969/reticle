@@ -9,9 +9,18 @@
  */
 
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
-import { proposePersonas, type Persona } from '@/features/harness/platform/personas.js';
+import { exploreScript } from './harness-script.js';
+import { proposePersonas } from '@/features/harness/platform/personas.js';
 import { randomUUID } from 'node:crypto';
-import { ReticleEnv, ReticleTool, asProjectId, cloudUrlFrom, asRecord } from '@reticlehq/core';
+import {
+  ReticleEnv,
+  ReticleTool,
+  asProjectId,
+  cloudUrlFrom,
+  asRecord,
+  type FlowFile,
+} from '@reticlehq/core';
+import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
 import {
@@ -32,7 +41,7 @@ import {
 import { jevDriver, jevOptionsFromEnv, type DrivePlanStep } from '@/features/harness/jev-driver.js';
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
 import { readContract } from '@/memory/project/dir/reticle-dir.js';
-import { sessionRoot } from '@/memory/project/session-root.js';
+import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { buildHarnessPlan, planAsText, type HarnessPlan } from './harness-plan.js';
 import {
   openAiDriver,
@@ -230,26 +239,28 @@ export async function exploreApp(
 ): Promise<ExploreResult> {
   const refusal = await refusedByPlatform(env, options);
   if (refusal !== undefined) throw new Error(refusal);
-  // The platform's Harness with no persona named: it proposes the people worth being, and each is
-  // driven in turn. Narrated into the HUD's Agent Log as a plan, so the person watching sees which
-  // journey is running and which proved.
-  const platform = serverOptionsFromEnv(env);
-  if (
-    options.focus === undefined &&
-    platform !== undefined &&
-    SERVER_DRIVER === (options.driverName ?? env[ReticleEnv.HARNESS_DRIVER])
-  ) {
-    const about = planAsText(await readPlan(deps, options.sessionId));
-    const personas = await proposePersonas(platform, about);
-    if (0 < personas.length) return explorePersonas(deps, env, options, personas);
+  // The flows a drive reads and diffs are the PROJECT's, which is where its saves land.
+  const reads = withProjectFlows(deps, options.sessionId);
+  // No journey named: plan the drive first. The platform's Harness proposes the people worth being;
+  // the saved flows, the user's request and the unproved intents fill in the rest. The plan is drawn
+  // on the HUD and updated as each part runs.
+  const before = new Set(await reads.flows.list());
+  if (options.focus === undefined) {
+    const platform = serverOptionsFromEnv(env);
+    const personas =
+      platform !== undefined &&
+      SERVER_DRIVER === (options.driverName ?? env[ReticleEnv.HARNESS_DRIVER])
+        ? await proposePersonas(platform, planAsText(await readPlan(reads, options.sessionId)))
+        : [];
+    const scripted = await exploreScript(deps, env, options, personas, before);
+    if (scripted !== undefined) return scripted;
   }
 
   const maxSteps = options.maxSteps ?? maxStepsFromEnv(env);
-  const before = new Set(await deps.flows.list());
   // `.reticle` FIRST, before the app and before anything reads a line of source. It already holds
   // every saved flow, the consequence that must hold for each, and the declared intent nobody has
   // tested — which is the whole of what a drive should be deciding against.
-  const plan = await readPlan(deps, options.sessionId);
+  const plan = await readPlan(reads, options.sessionId);
   /*
    * The fixtures this project has already paid for.
    *
@@ -310,16 +321,16 @@ export async function exploreApp(
     options.goals ?? goalsIn(options.focus),
   );
 
-  const after = await deps.flows.list();
+  const after = await reads.flows.list();
   const reconciled = reconcileFlows(before, after, drive.toolCalls);
   if (options.focus !== undefined) {
     await recordPersona(
-      deps,
+      reads,
       [...reconciled.savedFlows, ...reconciled.rewroteFlows],
       options.focus,
     );
   }
-  const unverifiedFlows = await flowsThatCheckNothing(deps, [
+  const unverifiedFlows = await flowsThatCheckNothing(reads, [
     ...reconciled.savedFlows,
     ...reconciled.rewroteFlows,
   ]);
@@ -327,7 +338,7 @@ export async function exploreApp(
 }
 
 /** A line in the HUD's Agent Log for the person watching; nobody watching is not an error. */
-function narrator(deps: ToolDeps, options: ExploreOptions): (text: string) => void {
+export function narrator(deps: ToolDeps, options: ExploreOptions): (text: string) => void {
   return (text) => {
     try {
       deps.sessions.resolve(options.sessionId).pushNarration(text);
@@ -337,54 +348,13 @@ function narrator(deps: ToolDeps, options: ExploreOptions): (text: string) => vo
   };
 }
 
-/** Drive each proposed persona in turn, and fold their results into one answer. */
-async function explorePersonas(
-  deps: ToolDeps,
-  env: Record<string, string | undefined>,
-  options: ExploreOptions,
-  personas: readonly Persona[],
-): Promise<ExploreResult> {
-  const narrate = narrator(deps, options);
-  narrate(`Plan · ${String(personas.length)} personas: ${personas.map((p) => p.name).join(', ')}`);
-  const results: ExploreResult[] = [];
-  const lines: string[] = [];
-  for (const persona of personas) {
-    narrate(`▸ ${persona.name}: ${persona.journey}`);
-    const result = await exploreApp(deps, env, {
-      ...options,
-      focus: `${persona.name}: ${persona.journey}`,
-    });
-    results.push(result);
-    const mark = result.drive.proved ? '✓' : '○';
-    const line = `${mark} ${persona.name} — ${result.drive.proved ? 'proved' : 'not proved'} (${result.drive.stopReason})`;
-    lines.push(line);
-    narrate(line);
+/** `deps` whose flow store is the session's own project, where the drive's saves land. */
+export function withProjectFlows(deps: ToolDeps, sessionId?: string): ToolDeps {
+  try {
+    return { ...deps, flows: flowsForSession(deps, sessionTarget(deps, sessionId)).flows };
+  } catch {
+    return deps;
   }
-  const last = results[results.length - 1] ?? (await exploreApp(deps, env, { ...options }));
-  const sum = (pick: (r: ExploreResult) => number): number =>
-    results.reduce((n, r) => n + pick(r), 0);
-  return {
-    ...last,
-    drive: {
-      ...last.drive,
-      steps: sum((r) => r.drive.steps),
-      proved: results.some((r) => r.drive.proved),
-      summary: [`Plan · ${String(personas.length)} personas`, ...lines, last.drive.summary].join(
-        '\n',
-      ),
-      usage: {
-        input: sum((r) => r.drive.usage.input),
-        output: sum((r) => r.drive.usage.output),
-        cacheRead: sum((r) => r.drive.usage.cacheRead),
-        cacheWrite: sum((r) => r.drive.usage.cacheWrite),
-      },
-    },
-    savedFlows: [...new Set(results.flatMap((r) => r.savedFlows))],
-    rewroteFlows: [...new Set(results.flatMap((r) => r.rewroteFlows))],
-    unverifiedFlows: [...new Set(results.flatMap((r) => r.unverifiedFlows))],
-    goals: results.flatMap((r) => r.goals),
-    planLines: [`Plan · ${String(personas.length)} personas`, ...lines],
-  };
 }
 
 /**
@@ -395,7 +365,7 @@ async function explorePersonas(
  * that already carries an intent keeps it. Best effort: a flow that cannot be read or rewritten is
  * still a saved flow.
  */
-async function recordPersona(
+export async function recordPersona(
   deps: ToolDeps,
   names: readonly string[],
   persona: string,
@@ -425,7 +395,7 @@ async function recordPersona(
  * feature broken. Named so the drive's report does not count it as evidence. A flow that cannot be
  * read is left out rather than guessed at.
  */
-async function flowsThatCheckNothing(
+export async function flowsThatCheckNothing(
   deps: ToolDeps,
   names: readonly string[],
 ): Promise<readonly string[]> {
@@ -503,7 +473,7 @@ export function reconcileFlows(
  *
  * It is not a silent substitution either way: the result reports the driver that actually drove.
  */
-async function preferredDriver(
+export async function preferredDriver(
   env: Record<string, string | undefined>,
   options: ExploreOptions,
 ): Promise<string | undefined> {
@@ -588,7 +558,7 @@ function platformConfig(env: Record<string, string | undefined>, options: Explor
  * retry or bring a key. Fields an older platform omits still default to yes inside
  * `fetchPlatformConfig`; only an answer that never arrived is a no.
  */
-async function refusedByPlatform(
+export async function refusedByPlatform(
   env: Record<string, string | undefined>,
   options: ExploreOptions,
 ): Promise<string | undefined> {
@@ -646,7 +616,7 @@ export function bankedIntent(persona: string | undefined, open: string): string 
     : `Autonomous drive of ${open}, banked after the run ended.`;
 }
 
-async function bankOpenRecording(
+export async function bankOpenRecording(
   toolset: HarnessToolset,
   drive: HarnessResult,
   persona: string | undefined,
@@ -685,13 +655,18 @@ export function openRecordingName(toolCalls: readonly ToolOutcome[]): string | u
  * ordinary state of a new project and not a reason to refuse to drive — so it answers an empty
  * plan rather than throwing.
  */
-async function readPlan(deps: ToolDeps, sessionId?: string): Promise<HarnessPlan> {
+export async function readFlows(deps: ToolDeps): Promise<FlowFile[]> {
+  const flows: FlowFile[] = [];
+  for (const name of await deps.flows.list()) {
+    const loaded = await deps.flows.load(name);
+    if (loaded.ok) flows.push(loaded.value);
+  }
+  return flows;
+}
+
+export async function readPlan(deps: ToolDeps, sessionId?: string): Promise<HarnessPlan> {
   try {
-    const flows = [];
-    for (const name of await deps.flows.list()) {
-      const loaded = await deps.flows.load(name);
-      if (loaded.ok) flows.push(loaded.value);
-    }
+    const flows = await readFlows(deps);
     const root = sessionRoot(deps, sessionId);
     const contract = await readContract(deps.fs, root);
     const project = await projectForRoot(deps, root).read();
@@ -719,7 +694,7 @@ async function readPlan(deps: ToolDeps, sessionId?: string): Promise<HarnessPlan
  * "no project record" rather than as a failure; the fixtures file is no different, and a throw on
  * this path would turn a missing directory into a refused drive.
  */
-function safeRoot(deps: ToolDeps, sessionId?: string): string | undefined {
+export function safeRoot(deps: ToolDeps, sessionId?: string): string | undefined {
   try {
     return sessionRoot(deps, sessionId);
   } catch {
@@ -727,7 +702,7 @@ function safeRoot(deps: ToolDeps, sessionId?: string): string | undefined {
   }
 }
 
-function pinned(options: ExploreOptions): { sessionId?: string } {
+export function pinned(options: ExploreOptions): { sessionId?: string } {
   return options.sessionId === undefined ? {} : { sessionId: options.sessionId };
 }
 
@@ -744,7 +719,7 @@ function pinned(options: ExploreOptions): { sessionId?: string } {
  * makes the harness work for somebody who never had a model API key of their own, which is most
  * people — and the reason this driver is worth having at all.
  */
-function buildDriver(
+export function buildDriver(
   env: Record<string, string | undefined>,
   maxSteps: number,
   plan: HarnessPlan,

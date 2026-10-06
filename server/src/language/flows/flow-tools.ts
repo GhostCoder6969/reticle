@@ -81,6 +81,9 @@ async function syncSavedFlowToCloud(
   }
 }
 
+/** A step index no recorded flow reaches; bounds `to` and `at`. */
+const MAX_REPLAY_STEP = 10_000;
+
 /**
  * The URL a leased context should open: the app's ORIGIN, not the live tab's current location.
  *
@@ -449,6 +452,20 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Resume at this step (index or step id). Earlier steps re-run as unchecked, unreported setup; a setup step marked effect:"commits" refuses the resume.',
         ),
+      to: z
+        .number()
+        .int()
+        .positive()
+        .max(MAX_REPLAY_STEP)
+        .optional()
+        .describe('Stop before this step (drive only to a point journeys branch from).'),
+      at: z
+        .number()
+        .int()
+        .positive()
+        .max(MAX_REPLAY_STEP)
+        .optional()
+        .describe('Continue at this step on the page as it is (after another flow ran `to` it).'),
       sweep: z
         .boolean()
         .optional()

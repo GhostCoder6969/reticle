@@ -76,6 +76,7 @@ export const SERVED_COMMANDS: readonly string[] = [
   // beside this file is what holds that.
   ReticleCommand.FLOWS,
   ReticleCommand.FLOW_PROGRESS,
+  ReticleCommand.PLAN,
 ];
 
 /**
