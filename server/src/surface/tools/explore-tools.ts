@@ -205,10 +205,19 @@ const NOTHING_RECORDED: Record<StopReason, string> = {
  * counted, and the chat's answer is then the same derived summary the agent would have read — never
  * a model's account of its own drive.
  */
-export async function driveForChat(deps: ToolDeps, goal: string): Promise<RemoteDriveOutcome> {
+export async function driveForChat(
+  deps: ToolDeps,
+  goal: string,
+  sessionId?: string,
+): Promise<RemoteDriveOutcome> {
   const explore = EXPLORE_TOOLS.find((tool) => ReticleTool.VERIFY_EXPLORE === tool.name);
   if (explore === undefined) throw new Error('this build has no Harness drive');
-  const out = asRecord(await runTool(explore, deps, { persona: goal }));
+  const out = asRecord(
+    await runTool(explore, deps, {
+      persona: goal,
+      ...(sessionId === undefined ? {} : { sessionId }),
+    }),
+  );
   const summary = 'string' === typeof out['summary'] ? out['summary'] : '';
   const error = 'string' === typeof out['error'] ? out['error'] : undefined;
   const note = 'string' === typeof out['note'] ? out['note'] : undefined;

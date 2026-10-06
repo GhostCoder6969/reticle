@@ -42,13 +42,19 @@ export interface RemoteDriveDeps {
   env: () => Promise<Record<string, string | undefined>>;
   /** Whether an app is connected to drive. */
   connected: () => boolean;
-  /** Drive the app toward `goal`. A throw is reported as a failed drive, in its own words. */
-  drive: (goal: string) => Promise<RemoteDriveOutcome>;
+  /**
+   * The tab to drive for `goal`, or undefined to let the drive choose. One tab, picked once and used
+   * for the whole drive and its pictures: with two tabs open, a drive that names none is refused on
+   * every call ("multiple sessions connected"), and the pictures would be of whichever tab was asked.
+   */
+  pick?: (goal: string) => string | undefined;
+  /** Drive the app toward `goal`, in `sessionId`. A throw is reported as a failed drive, in its own words. */
+  drive: (goal: string, sessionId: string | undefined) => Promise<RemoteDriveOutcome>;
   /**
    * What the driven tab shows now, as a JPEG, or undefined when it cannot be captured (a tab this
    * daemon did not launch). Absent: the drive runs with no picture, and the chat shows its steps.
    */
-  frame?: () => Promise<Uint8Array | undefined>;
+  frame?: (sessionId: string | undefined) => Promise<Uint8Array | undefined>;
   frameIntervalMs?: number;
   fetch?: FetchLike;
   intervalMs?: number;
@@ -90,21 +96,26 @@ export function startRemoteDrives(deps: RemoteDriveDeps): RemoteDrives {
       if ('string' !== typeof drive.id || 'string' !== typeof drive.goal) return;
       deps.log?.(`reticle: driving a request from the platform chat: ${drive.goal}`);
       const driveUrl = `${platform.url}${RESULT_PATH}/${encodeURIComponent(drive.id)}`;
+      const sessionId = deps.pick?.(drive.goal);
+      const frame = deps.frame;
       // Only when the person asked to watch: a picture of their app leaves this machine for it.
       const filming =
-        false === drive.record || deps.frame === undefined
+        false === drive.record || frame === undefined
           ? undefined
-          : film(deps.frame, deps.frameIntervalMs ?? REMOTE_DRIVE_FRAME_MS, (jpeg) =>
-              doFetch(`${driveUrl}/frames`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ jpeg }),
-                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-              }),
+          : film(
+              () => frame(sessionId),
+              deps.frameIntervalMs ?? REMOTE_DRIVE_FRAME_MS,
+              (jpeg) =>
+                doFetch(`${driveUrl}/frames`, {
+                  method: 'POST',
+                  headers,
+                  body: JSON.stringify({ jpeg }),
+                  signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+                }),
             );
       let outcome: RemoteDriveOutcome;
       try {
-        outcome = await deps.drive(drive.goal);
+        outcome = await deps.drive(drive.goal, sessionId);
       } catch (error) {
         outcome = { ok: false, summary: error instanceof Error ? error.message : String(error) };
       } finally {
@@ -168,4 +179,49 @@ function film(
       await busy;
     },
   };
+}
+
+/** What a connected tab says about itself, as far as picking one goes. */
+export interface DriveCandidate {
+  sessionId: string;
+  url: string;
+  lastSeenMs: number;
+  hidden: boolean;
+}
+
+/** The address of an http(s) URL, `host:port`, for matching a tab to the app a request names. */
+const hostOf = (url: string): string | undefined => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return undefined;
+  }
+};
+const URLS_IN_TEXT = /https?:\/\/[^\s"'<>,]+/gi;
+
+/**
+ * The tab a chat-requested drive should use: one whose address the request names, then a visible
+ * one over a hidden (throttled) one, then the one heard from most recently.
+ */
+export function pickDriveSession(
+  tabs: readonly DriveCandidate[],
+  goal: string,
+): string | undefined {
+  const named = new Set((goal.match(URLS_IN_TEXT) ?? []).flatMap((url) => hostOf(url) ?? []));
+  const rank = (tab: DriveCandidate): number[] => [
+    named.has(hostOf(tab.url) ?? '') ? 0 : 1,
+    tab.hidden ? 1 : 0,
+    tab.lastSeenMs,
+  ];
+  const better = (a: number[], b: number[]): boolean => {
+    for (let i = 0; i < a.length; i += 1) {
+      const x = a[i] ?? 0;
+      const y = b[i] ?? 0;
+      if (x !== y) return x < y;
+    }
+    return false;
+  };
+  let best: DriveCandidate | undefined;
+  for (const tab of tabs) if (best === undefined || better(rank(tab), rank(best))) best = tab;
+  return best?.sessionId;
 }

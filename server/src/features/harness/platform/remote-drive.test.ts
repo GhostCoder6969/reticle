@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
-import { startRemoteDrives, type RemoteDriveDeps, type RemoteDrives } from './remote-drive.js';
+import {
+  pickDriveSession,
+  startRemoteDrives,
+  type RemoteDriveDeps,
+  type RemoteDrives,
+} from './remote-drive.js';
 
 const LINKED = { [ReticleEnv.API_KEY]: 'k', [ReticleEnv.CLOUD_URL]: 'https://p.test/' };
 
@@ -160,5 +165,60 @@ describe('the live picture of a drive the chat asked for', () => {
     release();
     await ticking;
     expect(p.calls.some((c) => c.url.endsWith('/frames'))).toBe(false);
+  });
+});
+
+describe('which tab a chat-requested drive uses', () => {
+  const tab = (sessionId: string, url: string, lastSeenMs: number, hidden = false) => ({
+    sessionId,
+    url,
+    lastSeenMs,
+    hidden,
+  });
+
+  it('takes the tab whose address the request names', () => {
+    const tabs = [tab('a', 'http://localhost:3000/', 5), tab('b', 'http://localhost:4313/x', 50)];
+    expect(pickDriveSession(tabs, 'On http://localhost:4313, sign in works')).toBe('b');
+  });
+
+  it('otherwise takes a visible tab over a hidden one, then the one heard from last', () => {
+    const tabs = [
+      tab('hidden', 'http://localhost:4313/', 1, true),
+      tab('old', 'http://localhost:4313/', 900),
+      tab('fresh', 'http://localhost:4313/', 10),
+    ];
+    expect(pickDriveSession(tabs, 'the dashboard loads')).toBe('fresh');
+  });
+
+  it('answers nothing when no tab is connected', () => {
+    expect(pickDriveSession([], 'x')).toBeUndefined();
+  });
+
+  it('drives and films the tab it picked, so two open tabs never confuse the drive', async () => {
+    const p = platform({ id: 'ld_7', goal: 'x' });
+    const driven: (string | undefined)[] = [];
+    const filmed: (string | undefined)[] = [];
+    let release: () => void = () => undefined;
+    const remote = start({
+      fetch: p.fetch,
+      frameIntervalMs: 5,
+      pick: () => 'tab-2',
+      frame: (sessionId) => {
+        filmed.push(sessionId);
+        return Promise.resolve(new Uint8Array([filmed.length]));
+      },
+      drive: (_goal, sessionId) => {
+        driven.push(sessionId);
+        return new Promise((resolve) => {
+          release = () => resolve({ ok: true, summary: '' });
+        });
+      },
+    });
+    const ticking = remote.tick();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    release();
+    await ticking;
+    expect(driven).toEqual(['tab-2']);
+    expect(new Set(filmed)).toEqual(new Set(['tab-2']));
   });
 });
