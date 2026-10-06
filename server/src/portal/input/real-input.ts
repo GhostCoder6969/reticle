@@ -13,7 +13,11 @@ import { takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
 import type { Browser, Page } from 'playwright';
 import { stampedDriveUrl } from './drive-url-stamp.js';
 import { launchChromium } from '@/launch-chromium.js';
-import { chromiumLaunchHint, gotoOptions } from '@/portal/pool/playwright-launcher.js';
+import {
+  HIDE_RETICLE_CHROME_CSS,
+  chromiumLaunchHint,
+  gotoOptions,
+} from '@/portal/pool/playwright-launcher.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -459,7 +463,6 @@ export async function performGesture(
  * (Playwright applies this stylesheet only for the shot, then reverts) so visual baselines reflect
  * the app, not Reticle. Disabling animations settles any remaining transitions for determinism.
  */
-const HIDE_RETICLE_CHROME_CSS = '[data-reticle-overlay]{display:none !important}';
 const SCREENSHOT_DETERMINISM = { style: HIDE_RETICLE_CHROME_CSS, animations: 'disabled' } as const;
 
 /**
