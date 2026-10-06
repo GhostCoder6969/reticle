@@ -14,7 +14,7 @@ import {
 } from '@reticlehq/core';
 import type { FlowFile } from '@reticlehq/core';
 import { recordSuiteFlakes } from './suite/suite-flakes.js';
-import { ReticleTool } from '@reticlehq/core';
+import { AppRuntime, ReticleTool } from '@reticlehq/core';
 import { asNumber, asString, mutationTargetsFor, perturbationFor } from '@reticlehq/core';
 import { workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { log } from '@/log.js';
@@ -94,7 +94,9 @@ const MAX_REPLAY_STEP = 10_000;
  */
 export function leasableAppUrl(deps: ToolDeps, sessionId: string | undefined): string | undefined {
   try {
-    const url = deps.sessions.resolve(sessionId).url;
+    const session = deps.sessions.resolve(sessionId);
+    if (AppRuntime.WEB !== (session.runtime ?? AppRuntime.WEB)) return undefined; // desktop: no IPC in a lease
+    const url = session.url;
     if (typeof url !== 'string' || 0 === url.length) return undefined;
     return new URL(url).origin;
   } catch {
