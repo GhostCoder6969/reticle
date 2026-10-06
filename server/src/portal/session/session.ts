@@ -3,6 +3,7 @@ import { asProjectId, type ChannelId, type ImpactSnapshot, type ProjectId } from
 import type { HandshakeFacts } from './facts/handshake-facts.js';
 import { refusedResult } from './page-commands/undeclared-command.js';
 import { recordImpact } from '@/memory/impact/impact-recorder.js';
+import { recordNotes } from './human/notes-ledger.js';
 import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { CaptureLedger } from '@/surface/tools/feature-capture.js';
@@ -158,7 +159,7 @@ export class Session implements HandshakeFacts {
   #autoEnded = false;
   readonly #live = new LiveControl();
   /** Human review marks: mistakes the human pinned to elements, for the agent to drain and fix. */
-  readonly #review = new ReviewStore();
+  readonly #review = new ReviewStore((marks) => recordNotes(this.artifactRoot, marks));
   /** Whether the session_lease has already been returned (fire-once per session). */
   #firstCommandDone = false;
   /** Durable causal-journal recorder; undefined when journaling is off (opt-out or not yet attached). */
@@ -380,8 +381,7 @@ export class Session implements HandshakeFacts {
       const parsed = HumanMarkDataSchema.safeParse(event.data);
       if (parsed.success) {
         this.#review.add(parsed.data, this.elapsed());
-        // The impact record's `marks` field existed and nothing ever wrote it: the report would
-        // have shown a permanent zero next to a page covered in pins.
+        // Without this the report shows a permanent zero next to a page covered in pins.
         recordImpact({ marks: 1 }, {}, this.artifactRoot);
       }
     }

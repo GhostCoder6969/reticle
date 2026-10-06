@@ -64,6 +64,13 @@ interface ResolveOutcome {
 export class ReviewStore {
   readonly #marks: ReviewMark[] = [];
 
+  /** Told the full history after every add and resolve, so a caller can keep it on disk. */
+  readonly #onChange: ((marks: ReviewMark[]) => void) | undefined;
+
+  constructor(onChange?: (marks: ReviewMark[]) => void) {
+    this.#onChange = onChange;
+  }
+
   /** Store a new mark (status pending) stamped with the caller-supplied session-relative time. */
   add(data: HumanMarkData, at: number): ReviewMark {
     nextMarkId += 1;
@@ -79,6 +86,7 @@ export class ReviewStore {
     if (data.source !== undefined) mark.source = data.source;
     if (data.route !== undefined) mark.route = data.route;
     this.#marks.push(mark);
+    this.#onChange?.(this.all());
     return mark;
   }
 
@@ -118,6 +126,7 @@ export class ReviewStore {
     const mark = this.#marks.find((m) => m.id === id);
     if (mark === undefined || mark.status === MarkStatus.RESOLVED) return { resolved: false, id };
     mark.status = MarkStatus.RESOLVED;
+    this.#onChange?.(this.all());
     return { resolved: true, id, note: mark.note };
   }
 }

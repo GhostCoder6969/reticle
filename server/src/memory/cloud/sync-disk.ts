@@ -93,6 +93,7 @@ const DERIVED_FILE = {
   envelopes: ReticleDir.ENVELOPES_FILE,
   'assertion-tiers': ReticleDir.TIERS_FILE,
   coverage: ReticleDir.COVERAGE_FILE,
+  notes: ReticleDir.NOTES_FILE,
 } as const;
 
 /** The directory the sharded intent store writes into, beside the legacy flat file. */

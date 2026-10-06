@@ -458,6 +458,8 @@ export const ReticleDir = {
   FLAKE_FILE: 'flake.json',
   /** The app-wide coverage ledger — see server features/exhaust/ledger.ts. */
   COVERAGE_FILE: 'coverage.json',
+  /** Human review marks (HUD notes), pending and resolved — see server portal/session/human. */
+  NOTES_FILE: 'notes.json',
   /**
    * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
    * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in
