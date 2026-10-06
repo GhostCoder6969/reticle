@@ -260,7 +260,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `flow-replay-run.ts` when the merged file crossed the 1000-line cap. It belongs in this
   // directory rather than a subdirectory because `flow-cross-step.test.ts` sits here too and the
   // pair is the whole rule.
-  'server/src/language/flows': 35,
+  // 36 with `replay-from-hud.ts`: the ▶ replay a person starts from the HUD, moved out of
+  // `server/src/index.ts` (at its cap) when it gained a progress push per step.
+  'server/src/language/flows': 36,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the

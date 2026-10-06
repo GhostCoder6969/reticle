@@ -29,14 +29,12 @@ import {
   ReticleDir,
   ReticleEnv,
   LOOPBACK_HOST,
-  ReplayStatus,
   EventType,
 } from '@reticlehq/core';
-import type { FlowReplayResult } from '@reticlehq/core';
 import { originOf } from './portal/session/session-manager.js';
 import { setBrowserMode, BrowserMode } from './telemetry/browser-mode.js';
 import type { NetworkDetail } from './portal/input/network-detail.js';
-import { replayAndLearn } from './language/flows/flow-learning.js';
+import { replayFromHud } from './language/flows/replay-from-hud.js';
 import { createSharedServer } from './surface/http-server.js';
 import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
@@ -103,15 +101,7 @@ import {
   type InjectedConnect,
 } from './portal/pool/zero-install.js';
 
-/** A human-facing one-liner for a panel replay verdict — ✓ passed / ⚠ drifted / ✗ errored / ? unverifiable. */
-export function replayVerdictLine(result: FlowReplayResult): string {
-  if (result.status === ReplayStatus.OK) return `✓ "${result.name}" passed`;
-  if (result.status === ReplayStatus.DRIFT)
-    return `⚠ "${result.name}" drifted — a step no longer matches`;
-  if (result.status === ReplayStatus.UNVERIFIABLE)
-    return `? "${result.name}" unverifiable — ${result.unverifiable?.reason ?? 'could not be graded'}`;
-  return `✗ "${result.name}" failed — ${result.error?.message ?? 'could not replay'}`;
-}
+export { replayVerdictLine } from './language/flows/replay-from-hud.js';
 
 // Re-exported from the contract, where the names now live: a consumer importing the server should
 // not have to know that the vocabulary moved.
@@ -770,15 +760,8 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // verdict into the same activity log they watch the agent in. The page animates via the normal
   // replay path, so they see it re-drive and the ✓/⚠/✗ land.
   bridge.attachReplay((sessionId, flowName) => {
-    const session = bridge.sessions.get(sessionId);
-    if (session === undefined) return;
-    session.pushNarration(`▶ Replaying "${flowName}"…`);
-    replayAndLearn(effectiveDeps, { flowName, sessionId })
-      .then((result) => session.pushNarration(replayVerdictLine(result)))
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        session.pushNarration(`✗ Replay "${flowName}" failed — ${message}`);
-      });
+    if (bridge.sessions.get(sessionId) === undefined) return;
+    void replayFromHud(effectiveDeps, (id) => bridge.sessions.get(id), sessionId, flowName);
   });
   // On connect, hand the panel the replayable flows so it can render the ▶ list. Scoped to the
   // connecting session's project (a shared daemon serves many apps; each panel shows only its own

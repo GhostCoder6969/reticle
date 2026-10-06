@@ -25,7 +25,7 @@ import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arriv
 import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
-import { replayFlow } from './flow-replay.js';
+import { replayFlow, type ReplayFromOptions } from './flow-replay.js';
 import { anchorPrecondition, anchorQueryArgs, staleTargetResult } from './flow-step-runners.js';
 import { queryRefs } from './replay.js';
 import { assertSuccess, dynamicTestids, successLabel, SUCCESS_STEP_TOOL } from './flow-success.js';
@@ -754,6 +754,11 @@ export async function replayNamedFlow(
         // not hold, so one flow reports one verdict per step instead of stopping at the first defect.
         sweep: true === args['sweep'],
         ...(from === undefined ? {} : { from }),
+        // The HUD's replay chip, when the human pressed ▶. In-process only: an agent's arguments
+        // arrive as JSON and can never carry a function.
+        ...('function' === typeof args['onStep']
+          ? { onStep: args['onStep'] as NonNullable<ReplayFromOptions['onStep']> }
+          : {}),
       },
     );
   } catch (error: unknown) {

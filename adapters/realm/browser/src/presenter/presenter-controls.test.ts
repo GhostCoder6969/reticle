@@ -410,3 +410,37 @@ describe('the replay row', () => {
     presenter.destroy();
   });
 });
+
+describe('a replay started from a chip', () => {
+  it('plays on the chip, step by step, and says how it ended', () => {
+    document.body.innerHTML = '';
+    const presenter = new Presenter({});
+    presenter.mount();
+    presenter.handlePush({ name: 'flows', args: { flows: [{ name: 'refund' }] } });
+    const chip = (): HTMLElement | null =>
+      document.querySelector('.reticle-flow[data-reticle-replay="refund"]');
+    presenter.handlePush({
+      name: 'flow.progress',
+      args: { name: 'refund', done: 2, total: 4, status: 'playing' },
+    });
+    expect(chip()?.getAttribute('data-state')).toBe('playing');
+    expect(chip()?.style.getPropertyValue('--reticle-flow-progress')).toBe('50%');
+    const seeLogs = document.querySelector<HTMLElement>('[data-reticle-see-logs]');
+    expect(seeLogs?.hidden).toBe(false);
+    let opened = false;
+    document
+      .querySelector('[data-reticle-chat-view-btn="activity"]')
+      ?.addEventListener('click', () => {
+        opened = true;
+      });
+    seeLogs?.click();
+    expect(opened).toBe(true);
+    presenter.handlePush({
+      name: 'flow.progress',
+      args: { name: 'refund', done: 4, total: 4, status: 'passed' },
+    });
+    expect(chip()?.getAttribute('data-state')).toBe('passed');
+    expect(chip()?.textContent).toBe('✓ refund');
+    presenter.destroy();
+  });
+});

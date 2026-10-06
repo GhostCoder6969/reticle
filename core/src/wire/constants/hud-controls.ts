@@ -63,6 +63,8 @@ const PLAIN_CONTROLS = [
   // "See all" beside the Agent Log's replay row, and below Impact's recent bugs.
   'flows-all',
   'defects-all',
+  // "See the logs" beside a replay the person started from a chip.
+  'see-logs',
 ] as const;
 
 /** The attributes whose value is part of the id. Read by the browser to build one. */

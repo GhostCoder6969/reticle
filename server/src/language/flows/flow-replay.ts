@@ -356,6 +356,11 @@ async function runSignalStep(
  */
 export interface ReplayFromOptions {
   /**
+   * Told after every step it reports: how many are done, of how many, and whether this one held.
+   * The HUD's replay chip draws its progress from this; it must never throw into the replay.
+   */
+  onStep?: (done: number, total: number, held: boolean) => void;
+  /**
    * Resume at this step: an index, or a step's `id` (which survives edits that shift indices).
    *
    * There is no state to restore, so the steps before it are re-driven — quickly, as setup: their
@@ -468,7 +473,8 @@ async function runInvokeStep(
   }
   // `from` is an offset into the CALLER's steps. A sub-journey invoked from the setup prefix runs
   // whole and unchecked (from = its length); one invoked at or after the resume point runs normally.
-  const { from: _outer, ...rest } = options;
+  // Nor the progress callback: a sub-flow's steps are one step of the flow the chip is drawing.
+  const { from: _outer, onStep: _progress, ...rest } = options;
   const carried = setup ? { ...rest, from: sub.steps.length } : rest;
   const nested = await replayFlow(
     session,
@@ -523,6 +529,17 @@ export async function replayFlow(
   const waitFor = (step: FlowStep): number =>
     step.timeoutMs ?? flow.signalTimeoutMs ?? signalTimeoutMs;
   let index = 0;
+  const tell = (result: FlowStepResult | undefined): void => {
+    try {
+      options.onStep?.(
+        index + 1,
+        flow.steps.length,
+        true === result?.ok && result.drift === undefined,
+      );
+    } catch {
+      /* progress is a picture of the replay, never a reason to stop it */
+    }
+  };
   try {
     for (const step of flow.steps) {
       if (step.invoke !== undefined) {
@@ -542,6 +559,7 @@ export async function replayFlow(
         );
         const last = results[results.length - 1];
         if (last !== undefined && index < from && last.ok) results.pop();
+        tell(last);
         if (last !== undefined && false === last.ok) break;
         index += 1;
         continue;
@@ -663,6 +681,7 @@ export async function replayFlow(
       }
       if (index < from) result.note = `setup step for resuming at step ${String(from)} failed`;
       results.push(result);
+      tell(result);
       // Under `sweep`, a failure whose action still RAN does not stop the run — the page is where the
       // step left it, so the next step is as meaningful as it was going to be. Anything else halts.
       const sweepPast =

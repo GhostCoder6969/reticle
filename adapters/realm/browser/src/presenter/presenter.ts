@@ -234,6 +234,7 @@ export class Presenter {
   handlePush(command: { name: string; args: Record<string, unknown> }): void {
     const a = command.args;
     if (command.name === ReticleCommand.FLOWS) return void this.#panel.setFlows(a['flows']);
+    if (command.name === ReticleCommand.FLOW_PROGRESS) return void this.#panel.setFlowProgress(a);
     if (command.name === ReticleCommand.IMPACT) {
       const snapshot = parseImpactSnapshot(a['snapshot']);
       if (snapshot !== undefined) {

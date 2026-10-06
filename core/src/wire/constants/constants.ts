@@ -948,12 +948,10 @@ export const ReticleCommand = {
   NAVIGATE: 'navigate',
   /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */
   REFRESH: 'refresh',
-  /**
-   * Bridge → browser: the saved flows the human can replay from the panel.
-   * `args: { flows: [{ name, start? }] }` — `start` is the first step's testid anchor, a page hint the
-   * HUD uses to show a flow only where it can begin. Absent when the first step isn't testid-anchored.
-   */
+  /** Bridge → browser: replayable flows, `{ flows: [{ name, start? }] }`; `start` = first testid. */
   FLOWS: 'flows',
+  /** Bridge → browser: a HUD replay's progress, `{ name, done, total, status }`. */
+  FLOW_PROGRESS: 'flow.progress',
 } as const;
 export type ReticleCommand = (typeof ReticleCommand)[keyof typeof ReticleCommand];
 

@@ -54,3 +54,11 @@ export const HudCorner = {
   BOTTOM_RIGHT: 'bottom-right',
 } as const;
 export type HudCorner = (typeof HudCorner)[keyof typeof HudCorner];
+
+/** Where a replay the human started from the HUD stands, for the chip's progress bar. */
+export const FlowProgressStatus = {
+  PLAYING: 'playing',
+  PASSED: 'passed',
+  FAILED: 'failed',
+} as const;
+export type FlowProgressStatus = (typeof FlowProgressStatus)[keyof typeof FlowProgressStatus];
