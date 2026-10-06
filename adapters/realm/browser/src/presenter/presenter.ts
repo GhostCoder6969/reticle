@@ -95,6 +95,7 @@ import { Annotator, type AnnotatorChrome } from '@/review/annotator.js';
 import { shouldAutoOpenChat } from './presenter-shell.js';
 import { installHudTelemetry } from './hud-telemetry.js';
 import { PLAN_HTML, PlanBoard, parsePlanView } from './presenter-plan.js';
+import { readRememberedLog, rememberLog, type RememberedRow } from './chrome/log-memory.js';
 
 /** How long the copy button shows it worked. */
 const COPIED_FLASH_MS = 1600;
@@ -149,6 +150,8 @@ export class Presenter {
   #logMax: number;
   #log: HTMLElement | undefined;
   #plan = new PlanBoard();
+  /** The rows on screen, as they are kept across a reload. */
+  #remembered: RememberedRow[] = [];
   /** now of the first row, the baseline for the +elapsed timestamps. */
   #logBaseMs: number | undefined;
   // Live-control panel: the two-way control surface (Pause/Resume + End + message Send).
@@ -323,7 +326,25 @@ export class Presenter {
       this.#hudTelemetryTeardown = installHudTelemetry(document, root, this.#onHudUse);
     }
     this.setMode(this.#mode);
+    this.#restoreLog();
     this.#renderTally();
+  }
+  /** Repaint the rows this tab showed before the page reloaded. */
+  #restoreLog(): void {
+    const log = this.#log;
+    if (log === undefined || 0 < this.#remembered.length) return;
+    for (const row of readRememberedLog().slice(-this.#logMax)) {
+      const handle = appendLogRow(log, row.kind, row.text, row.ts, this.#logMax, row.actor);
+      if (row.result !== undefined) handle.result(row.result);
+      this.#logBaseMs = this.#now() - row.at;
+      this.#runLog.push({
+        at: row.at,
+        kind: row.kind,
+        text: row.text,
+        ...(row.result === undefined ? {} : { result: row.result }),
+      });
+      this.#remembered.push(row);
+    }
   }
   /** Wire annotation chrome; expanding the HUD enters annotate mode. */
   bindAnnotator(annotator: Annotator): void {
@@ -389,6 +410,9 @@ export class Presenter {
     this.#sessionActive = false;
     this.#logBaseMs = undefined;
     this.#log = undefined;
+    // Taken down on purpose (disconnect, or the agent removed the HUD), not by a reload: start clean.
+    this.#remembered = [];
+    rememberLog([]);
     this.#root?.remove();
     document.querySelectorAll('style[data-reticle-overlay]').forEach((s) => s.remove());
     this.#root = undefined;
@@ -693,6 +717,8 @@ export class Presenter {
   }
   #clearRunLog(): void {
     this.#runLog = [];
+    this.#remembered = [];
+    rememberLog([]);
     this.#tallied = { passes: 0, fails: 0 };
     if (this.#log !== undefined) clearLogRows(this.#log);
     this.#renderTally();
@@ -734,6 +760,17 @@ export class Presenter {
     const ts = formatElapsed(ms - this.#logBaseMs);
     const handle = appendLogRow(this.#log, kind, trimmed, ts, this.#logMax, actor);
     if (result !== undefined) handle.result(result);
+    const kept: RememberedRow = {
+      kind,
+      text: trimmed,
+      ts,
+      at: ms - this.#logBaseMs,
+      ...(actor === undefined ? {} : { actor }),
+      ...(result === undefined ? {} : { result }),
+    };
+    this.#remembered.push(kept);
+    while (this.#remembered.length > this.#logMax) this.#remembered.shift();
+    rememberLog(this.#remembered);
     if (this.#shell.isCollapsed()) this.#shell.pulseFab(true);
     this.#renderTally();
     // Wrap the handle so a later outcome stamp updates BOTH the DOM glyph and the run-log entry.
@@ -741,6 +778,8 @@ export class Presenter {
       result: (r: LogResult) => {
         handle.result(r);
         entry.result = r;
+        kept.result = r;
+        rememberLog(this.#remembered);
         this.#renderTally(); // a deferred ✓/✗ stamp bumps the header tally
       },
     };

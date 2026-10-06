@@ -286,3 +286,79 @@ describe('the report says how far into the app the drive got', () => {
     expect(report).toContain('Reached 1 page(s): /home');
   });
 });
+
+/**
+ * Found driving the merchant dashboard: the Harness's own act result named a refund sent at 1/100th
+ * of its amount, fired twice, and a settings save refused with a 422. Its report kept the verdict
+ * word and dropped all three, then ended "proved its checks", and the caller reported no defect.
+ */
+describe('the evidence travels with the verdict', () => {
+  const refund = call(
+    'reticle_act_and_wait',
+    { ref: 'e523', action: 'click', until: { kind: 'net', method: 'POST' } },
+    {
+      element: 'button "Refund now"',
+      verified: 'no',
+      because: 'channels disagree about this action (unit-mismatch)',
+      contradictions: [
+        {
+          kind: 'unit-mismatch',
+          counter: 'the value sent is 100x SMALLER',
+          detail: '/api/v1/payments/pay_1/refund',
+        },
+        { kind: 'duplicate-request', counter: 'the same write fired 2 times', detail: 'POST ×2' },
+      ],
+    },
+  );
+  const save = call(
+    'reticle_act_and_wait',
+    { ref: 'e539', action: 'check', until: { kind: 'net', method: 'PATCH' } },
+    {
+      verified: 'no',
+      verdict: {
+        pass: true,
+        evidence: {
+          method: 'PATCH',
+          url: '/api/v1/settings',
+          status: 422,
+          responseBody: '{"error":"requires KYC level 2"}',
+        },
+      },
+    },
+  );
+  const navigated = call(
+    'reticle_act_and_wait',
+    { ref: 'e85', action: 'click', until: { kind: 'route', contains: 'settings' } },
+    { verified: 'yes' },
+  );
+
+  it('names each disagreement and each failed write under the step', () => {
+    const summary = describeDrive([refund, save, navigated], []);
+    expect(summary).toContain('unit-mismatch: the value sent is 100x SMALLER');
+    expect(summary).toContain('duplicate-request: the same write fired 2 times');
+    expect(summary).toContain('PATCH /api/v1/settings → 422 {"error":"requires KYC level 2"}');
+  });
+
+  it('leads with NOT PROVED when one check passed and two failed', () => {
+    const summary = describeDrive([refund, save, navigated], []);
+    expect(summary.split('\n')[0]).toBe(
+      'NOT PROVED — 1 of 3 check(s) held, 2 failed, 0 undecided. The failures below are findings.',
+    );
+  });
+
+  it('does not call a replay stopped at a destructive step a regression', () => {
+    const guarded = call(
+      'reticle_flow_replay',
+      { flowName: 'refund-flow' },
+      {
+        status: 'error',
+        error: {
+          message: 'potentially destructive action blocked; retry with args.confirmDangerous=true',
+        },
+      },
+    );
+    const summary = describeDrive([guarded], []);
+    expect(summary).toContain('NOT RUN: refund-flow');
+    expect(summary).not.toContain('regressions');
+  });
+});

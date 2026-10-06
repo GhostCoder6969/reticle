@@ -84,7 +84,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // escaping, and the dashboard-url scheme check that exists because `javascript:` once produced a
   // link running code inside the developer's own app. A security rule living in two files gets
   // fixed in one of them, so the duplicate was not an option.
-  'adapters/realm/browser/src/presenter/chrome': 11,
+  // 12 with `log-memory.ts`: the Agent Log's rows kept across the reloads a replay causes, beside
+  // the log they belong to.
+  'adapters/realm/browser/src/presenter/chrome': 12,
   /*
    * 12 because `verdict-attribution.ts` earns its own module, and the reason is measured rather than
    * tidy: folded into `verified-constants.ts` it added 687 B to what EVERY page downloads just for

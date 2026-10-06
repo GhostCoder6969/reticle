@@ -17,6 +17,7 @@ import {
   type ScriptRun,
 } from '@/features/harness/script/script-run.js';
 import { CUSTOM_DRIVER_NAME } from '@/features/harness/drivers.js';
+import { checkTally, verdictLine } from '@/features/harness/drive-report.js';
 import {
   runHarness,
   StopReason,
@@ -31,7 +32,7 @@ import { leasableAppUrl } from '@/language/flows/flow-tools.js';
 import type { ToolDeps } from './tool-kit.js';
 import { acquireLeasedSession } from './lease-tools.js';
 import { reticleToolset } from './harness-toolset.js';
-import { PlanStepKind, planAsText } from './harness-plan.js';
+import { PlanStepKind, planAsText, withoutReplays } from './harness-plan.js';
 import {
   MSG_HARNESS_DISABLED,
   bankOpenRecording,
@@ -94,7 +95,7 @@ export async function exploreScript(
   const requested =
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   // The script replays the saved flows itself; a model handed them too replayed them again per goal.
-  const open = { ...plan, steps: plan.steps.filter((s) => PlanStepKind.DRIVE === s.kind) };
+  const open = withoutReplays(plan);
   const driverFor = (persona?: string): { driver: ModelDriver; name: string } =>
     options.driver === undefined
       ? buildDriver(env, maxSteps, open, requested, fills, persona)
@@ -168,7 +169,7 @@ export async function exploreScript(
   narrate(
     run.stopped
       ? 'Autonomous driving switched off — the Harness stopped. What it drove is kept.'
-      : `Harness finished the plan — ${run.lines.filter((l) => l.startsWith('✓')).length} of ${String(run.lines.length)} passed`,
+      : `Harness finished the plan — ${String(run.lines.filter((l) => l.startsWith('✓')).length)} of ${String(run.lines.length)} journeys passed. ${verdictLine(checkTally(run.toolCalls))}`,
   );
 
   const sum = (pick: (r: HarnessResult) => number): number =>

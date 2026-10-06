@@ -32,7 +32,7 @@ So the drive is a one-off: pay for it once, and the journeys it recorded become 
 
 A drive reads `.reticle` first: every saved flow with the consequence that must still hold, and every signal and testid your app declares that no flow has ever asserted. It builds a plan from that before it opens its eyes on a page.
 
-Anything already recorded is **replayed**, deterministically, with no model call at all. Only the gaps are driven. So a second run over the same app is mostly free, and the model budget is spent on the part nobody has proved yet rather than on rediscovering what is already on disk. A replay that goes red is reported as a regression; one that DRIFTS is reported separately, because the app moved under the recording and that needs re-anchoring rather than a code change.
+With no persona, anything already recorded is **replayed**, deterministically, with no model call at all, and only the gaps are driven (see the plan below). With a persona, it drives that journey and replays nothing else: the saved flows have nothing to do with the journey you named. So a second run over the same app is mostly free, and the model budget is spent on the part nobody has proved yet rather than on rediscovering what is already on disk. A replay that goes red is reported as a regression; one that DRIFTS is reported separately, because the app moved under the recording and that needs re-anchoring rather than a code change.
 
 Every journey a drive walks is saved, whatever happens to the drive, including one that broke, ran out of budget, or whose model simply stopped asking for tools.
 

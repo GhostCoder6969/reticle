@@ -29,6 +29,7 @@ import {
   type HarnessDriverOptions,
 } from '@/features/harness/driver.js';
 import { fillValues } from '@/features/harness/fill-values.js';
+import { checkTally, verdictLine } from '@/features/harness/drive-report.js';
 import { openFillValues, type FillValueStore } from '@/memory/project/dir/fill-value-store.js';
 import {
   ANTHROPIC_DRIVER_NAME,
@@ -42,7 +43,7 @@ import { jevDriver, jevOptionsFromEnv, type DrivePlanStep } from '@/features/har
 import { buildDomainModel } from '@/judgement/domain/domain-model.js';
 import { readContract } from '@/memory/project/dir/reticle-dir.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
-import { buildHarnessPlan, planAsText, type HarnessPlan } from './harness-plan.js';
+import { buildHarnessPlan, planAsText, withoutReplays, type HarnessPlan } from './harness-plan.js';
 import {
   openAiDriver,
   openAiOptionsFromEnv,
@@ -275,7 +276,7 @@ export async function exploreApp(
     options.driverName ?? env[ReticleEnv.HARNESS_DRIVER] ?? (await preferredDriver(env, options));
   const built =
     options.driver === undefined
-      ? buildDriver(env, maxSteps, plan, requested, fills, options.focus)
+      ? buildDriver(env, maxSteps, withoutReplays(plan), requested, fills, options.focus)
       : { driver: options.driver, name: CUSTOM_DRIVER_NAME };
   const driver = built.driver;
 
@@ -297,7 +298,7 @@ export async function exploreApp(
     // rather than remembered from a first one. `focus` is the caller's own words and goes last:
     // somebody who named a journey meant that journey, whatever the project's backlog says.
     focus: [
-      planAsText(plan),
+      planAsText(withoutReplays(plan)),
       ...(options.focus === undefined ? [] : [`Focus: ${options.focus}`]),
     ].join('\n\n'),
   });
@@ -305,7 +306,7 @@ export async function exploreApp(
   narrate(
     StopReason.STOPPED === drive.stopReason
       ? `Autonomous driving switched off — the Harness stopped after ${String(drive.steps)} steps. What it drove is kept.`
-      : `Harness finished — ${drive.proved ? 'proved its checks' : 'nothing proved'} (${drive.stopReason})`,
+      : `Harness finished — ${verdictLine(checkTally(drive.toolCalls))}`,
   );
   // Written once, after the drive, whatever the drive did: a run that broke still learned what it
   // learned, and the next one should not pay for it again.

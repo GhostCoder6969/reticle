@@ -204,3 +204,12 @@ export function planAsText(plan: HarnessPlan): string {
   );
   return `PLAN (from .reticle, not from the source):\n${lines.join('\n')}`;
 }
+
+/**
+ * The plan a model drives from: the gaps only. Saved flows are replayed by the plan's own lanes, or
+ * not at all when a person named the journey; a model handed them replayed every one, unrelated to
+ * the journey it was asked for, and spent most of its drive there.
+ */
+export function withoutReplays(plan: HarnessPlan): HarnessPlan {
+  return { ...plan, steps: plan.steps.filter((step) => PlanStepKind.DRIVE === step.kind) };
+}

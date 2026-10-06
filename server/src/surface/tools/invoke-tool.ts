@@ -1,4 +1,5 @@
 import { healthEnvelope } from '@/portal/session/session-health.js';
+import { logToolCall, toolLogPath } from '@/hooks/tool-log.js';
 import { nextStep } from './next-step.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
@@ -384,6 +385,25 @@ function pinnedArgs(
 }
 
 export async function runTool<Ext>(
+  tool: ToolDef<Ext>,
+  deps: ToolDeps<Ext>,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const logPath = toolLogPath();
+  if (logPath === undefined) return dispatchTool(tool, deps, args);
+  const at = deps.now();
+  try {
+    const result = await dispatchTool(tool, deps, args);
+    logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, result });
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logToolCall(logPath, { tool: tool.name, args, at, ms: deps.now() - at, error: message });
+    throw error;
+  }
+}
+
+async function dispatchTool<Ext>(
   tool: ToolDef<Ext>,
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,

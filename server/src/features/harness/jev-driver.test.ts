@@ -523,6 +523,32 @@ describe('a control the destructive gate refused', () => {
     expect(result.calls[0]?.args['args']).toMatchObject({ confirmDangerous: true });
   });
 
+  it('never offers it again once it ran with the permission', async () => {
+    const ran: HistoryEntry = {
+      role: 'tool',
+      outcomes: [
+        outcome(
+          'reticle_act_and_wait',
+          { ref: 'e5', action: 'click', args: { confirmDangerous: true } },
+          { verified: 'no' },
+        ),
+      ],
+    };
+    const seen = { bodies: [] as string[] };
+    await turn(
+      [...READY, refused('e5'), ran, { role: 'tool', outcomes: [snapshotOf('/#/home')] }],
+      chose('e4'),
+      seen,
+    );
+    const asked = seen.bodies.find((body) => body.includes('next_action')) ?? '{}';
+    const offered = JSON.stringify(
+      (JSON.parse(asked) as { questions?: { next_action?: { criteria?: object } } }).questions
+        ?.next_action?.criteria ?? JSON.parse(asked),
+    );
+    expect(offered).toContain('"e4"');
+    expect(offered).not.toContain('"e5"');
+  });
+
   it('does not grant the permission to a control that was never refused', async () => {
     const result = await turn(READY, chose('e5'));
     expect(result.calls[0]?.args['args']).toBeUndefined();

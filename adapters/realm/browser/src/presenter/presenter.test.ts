@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { PresenterMode } from '@reticlehq/core';
 import { Presenter } from './presenter.js';
 import type { PresenterRunState } from './presenter-run-state.js';
@@ -7,6 +7,11 @@ import { buildSnapshot } from '@/dom/snapshot.js';
 import { isIgnored } from '@/dom/dom-ignore.js';
 import { until, wait } from './presenter.test-helpers.js';
 import { ACT_STRIP } from './presenter-config.js';
+
+// Each test is a fresh tab: the Agent Log keeps its rows in sessionStorage across a reload.
+beforeEach(() => {
+  sessionStorage.clear();
+});
 
 describe('presenter / transparency layer', () => {
   it('mounts an overlay that is excluded from snapshots, then narrates + destroys', () => {

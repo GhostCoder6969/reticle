@@ -856,6 +856,9 @@ export function jevDriver(options: JevDriverOptions): ModelDriver {
         criteria[BACK_OPTION] =
           `Go back to ${previous}: this page is a dead end, or a journey started there is not finished.`;
       for (const candidate of candidates) {
+        // Refused, then run with the permission: the destructive thing happened. Offering it again
+        // is offering a second refund, and on a driven payments dashboard the driver took it.
+        if (drive.blocked.includes(candidate.ref) && drive.acted.includes(candidate.ref)) continue;
         const verb = actionFor(candidate.role);
         const already = drive.acted.includes(candidate.ref) ? ' (already driven once)' : '';
         criteria[candidate.ref] = `${verb} the ${candidate.desc}${already}`;

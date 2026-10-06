@@ -40,6 +40,45 @@ export interface DrivenStep {
    * noise, and the report is read every drive.
    */
   claimed: string | undefined;
+  /**
+   * What the engine saw that decided it: each channel that disagreed, and any write the app sent
+   * that failed. The act's own result carries all of it; a report that kept only the verdict word
+   * handed the caller "unit-mismatch" and left it unable to say what was wrong.
+   */
+  evidence: string[];
+}
+
+/** Characters of a response body quoted in the evidence: enough for an error message. */
+const MAX_BODY_CHARS = 200;
+/** Contradictions quoted per step. */
+const MAX_EVIDENCE = 3;
+
+/** The deciding evidence an act result carries, as short lines. */
+function evidenceOf(result: Record<string, unknown>): string[] {
+  const lines: string[] = [];
+  const contradictions = result['contradictions'];
+  if (Array.isArray(contradictions)) {
+    for (const raw of contradictions.slice(0, MAX_EVIDENCE)) {
+      const c = asRecord(raw);
+      const parts = [asString(c['counter']), asString(c['detail'])].filter(
+        (part): part is string => part !== undefined && 0 < part.length,
+      );
+      lines.push(`${asString(c['kind']) ?? 'contradiction'}: ${parts.join(' — ')}`);
+    }
+  }
+  const verdict = asRecord(result['verdict']);
+  const seen = asRecord(verdict['evidence']);
+  const status = seen['status'];
+  if ('number' === typeof status && 400 <= status) {
+    const body = asString(seen['responseBody']);
+    lines.push(
+      `${asString(seen['method']) ?? ''} ${asString(seen['url']) ?? ''} → ${String(status)}` +
+        (body === undefined ? '' : ` ${body.slice(0, MAX_BODY_CHARS)}`),
+    );
+  }
+  const observed = asString(verdict['observed']);
+  if (false === verdict['pass'] && observed !== undefined) lines.push(`observed: ${observed}`);
+  return lines;
 }
 
 /** How many steps are listed before the account starts counting instead of naming. */
@@ -85,7 +124,16 @@ function targetOf(args: Record<string, unknown>, result: Record<string, unknown>
  * resolving — the app moved under a recording, which is a finding about the RECORDING rather than
  * proof the feature broke, and collapsing it into "failed" would send somebody to fix working code.
  */
-export const ReplayOutcome = { OK: 'ok', DRIFT: 'drift', ERROR: 'error' } as const;
+export const ReplayOutcome = {
+  OK: 'ok',
+  DRIFT: 'drift',
+  ERROR: 'error',
+  /** Stopped at a step the flow marks destructive: not run, which is not a regression. */
+  GUARDED: 'guarded',
+} as const;
+
+/** The refusal a replay gives at a destructive step it was not told to confirm. */
+const DESTRUCTIVE_REFUSAL = 'confirmDangerous';
 
 export function replayedFlows(
   toolCalls: readonly ToolOutcome[],
@@ -94,9 +142,16 @@ export function replayedFlows(
   for (const call of toolCalls) {
     if (ReticleTool.FLOW_REPLAY !== call.name) continue;
     const name = asString(asRecord(call.args)['flowName']) ?? 'a flow';
+    const result = asRecord(call.result);
+    const message =
+      asString(asRecord(result['error'])['message']) ?? asString(result['error']) ?? '';
+    const status = call.isError ? ReplayOutcome.ERROR : asString(result['status']);
     out.push({
       name,
-      status: call.isError ? ReplayOutcome.ERROR : asString(asRecord(call.result)['status']),
+      status:
+        ReplayOutcome.ERROR === status && message.includes(DESTRUCTIVE_REFUSAL)
+          ? ReplayOutcome.GUARDED
+          : status,
     });
   }
   return out;
@@ -146,6 +201,7 @@ export function drivenSteps(toolCalls: readonly ToolOutcome[]): DrivenStep[] {
       verified: call.isError ? 'error' : asString(result['verified']),
       because: call.isError ? asString(result['error']) : asString(result['because']),
       claimed: describeClaim(args['until']),
+      evidence: call.isError ? [] : evidenceOf(result),
     });
   }
   return steps;
@@ -171,6 +227,40 @@ function pagesReached(toolCalls: readonly ToolOutcome[]): string[] {
   return pages;
 }
 
+/** How the drive's checks came out: act_and_wait with an `until`, and asserts. */
+export function checkTally(toolCalls: readonly ToolOutcome[]): {
+  held: number;
+  failed: number;
+  undecided: number;
+} {
+  const tally = { held: 0, failed: 0, undecided: 0 };
+  for (const call of toolCalls) {
+    const isCheck =
+      ReticleTool.ASSERT === call.name ||
+      (ReticleTool.ACT_AND_WAIT === call.name && asRecord(call.args)['until'] !== undefined);
+    if (!isCheck || call.isError) continue;
+    const verified = asString(asRecord(call.result)['verified']);
+    if (Verified.YES === verified) tally.held += 1;
+    else if (Verified.NO === verified) tally.failed += 1;
+    else tally.undecided += 1;
+  }
+  return tally;
+}
+
+/**
+ * The first line a caller reads, and the one the HUD ends on. A drive whose only passing check was
+ * a page change, beside a refund that failed, is NOT "proved its checks"; that line ended a run
+ * where the journey it was asked to prove had failed.
+ */
+export function verdictLine(tally: { held: number; failed: number; undecided: number }): string {
+  const total = tally.held + tally.failed + tally.undecided;
+  if (0 === total) return 'NOT PROVED: the drive ran no check.';
+  const counts = `${String(tally.held)} of ${String(total)} check(s) held, ${String(tally.failed)} failed, ${String(tally.undecided)} undecided`;
+  if (0 < tally.failed) return `NOT PROVED — ${counts}. The failures below are findings.`;
+  if (0 < tally.undecided) return `NOT PROVED — ${counts}.`;
+  return `PROVED — ${counts}.`;
+}
+
 export function describeDrive(
   toolCalls: readonly ToolOutcome[],
   savedFlows: readonly string[],
@@ -193,13 +283,19 @@ export function describeDrive(
           const held = replays.filter((r) => ReplayOutcome.OK === r.status);
           const failed = replays.filter((r) => ReplayOutcome.ERROR === r.status);
           const drifted = replays.filter((r) => ReplayOutcome.DRIFT === r.status);
+          const guarded = replays.filter((r) => ReplayOutcome.GUARDED === r.status);
           const lines = [
             `Replayed ${String(replays.length)} recorded journey(s) with NO model in the loop: ` +
-              `${String(held.length)} still hold, ${String(failed.length)} failed, ${String(drifted.length)} drifted.`,
+              `${String(held.length)} still hold, ${String(failed.length)} failed, ${String(drifted.length)} drifted` +
+              `${0 === guarded.length ? '' : `, ${String(guarded.length)} not run`}.`,
           ];
           if (0 < failed.length)
             lines.push(
               `  FAILED: ${failed.map((r) => r.name).join(', ')} — regressions in journeys that used to pass.`,
+            );
+          if (0 < guarded.length)
+            lines.push(
+              `  NOT RUN: ${guarded.map((r) => r.name).join(', ')} — stopped at a step marked destructive. Not a regression: replay with confirmDangerous to run it.`,
             );
           if (0 < drifted.length)
             lines.push(
@@ -222,6 +318,7 @@ export function describeDrive(
 
   const pages = pagesReached(toolCalls);
   const lines: string[] = [
+    verdictLine(checkTally(toolCalls)),
     ...(replayLine === undefined ? [] : [replayLine]),
     `Drove ${String(steps.length)} action(s): ${String(proved.length)} proved, ` +
       `${String(failed.length)} failed, ${String(undecided.length)} not decided.`,
@@ -245,6 +342,7 @@ export function describeDrive(
         ? ` (claimed ${step.claimed})`
         : '';
     lines.push(`  ${step.action} ${step.target}: ${verdict}${claimed}${because}`);
+    for (const line of step.evidence) lines.push(`      ${line}`);
   }
   if (MAX_LISTED < steps.length) lines.push(`  … and ${String(steps.length - MAX_LISTED)} more.`);
 
