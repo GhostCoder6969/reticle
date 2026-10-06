@@ -16,6 +16,8 @@ import { unprovedGoals } from '@/features/harness/goals.js';
 import { ReticleTool, asRecord } from '@reticlehq/core';
 import { stepCountSchema } from './args/numeric-bounds.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
+import { runTool } from './invoke-tool.js';
+import type { RemoteDriveOutcome } from '@/features/harness/platform/remote-drive.js';
 import {
   exploreApp,
   harnessAvailable,
@@ -195,3 +197,26 @@ const NOTHING_RECORDED: Record<StopReason, string> = {
   [StopReason.STOPPED]:
     'Autonomous driving was switched off before the drive saved anything. Nothing is proved; switch it back on to drive again.',
 };
+
+/**
+ * A drive the platform's chat asked for, run as the very tool an agent would call.
+ *
+ * Through `runTool`, not a second path to `exploreApp`: a dispatch that skips it is a drive nobody
+ * counted, and the chat's answer is then the same derived summary the agent would have read — never
+ * a model's account of its own drive.
+ */
+export async function driveForChat(deps: ToolDeps, goal: string): Promise<RemoteDriveOutcome> {
+  const explore = EXPLORE_TOOLS.find((tool) => ReticleTool.VERIFY_EXPLORE === tool.name);
+  if (explore === undefined) throw new Error('this build has no Harness drive');
+  const out = asRecord(await runTool(explore, deps, { persona: goal }));
+  const summary = 'string' === typeof out['summary'] ? out['summary'] : '';
+  const error = 'string' === typeof out['error'] ? out['error'] : undefined;
+  const note = 'string' === typeof out['note'] ? out['note'] : undefined;
+  return {
+    // Only a drive that ran a check and did not break counts as one that proved anything.
+    ok: true === out['proved'] && error === undefined,
+    summary: [summary, note, error === undefined ? undefined : `Error: ${error}`]
+      .filter((line): line is string => line !== undefined && 0 < line.length)
+      .join('\n'),
+  };
+}

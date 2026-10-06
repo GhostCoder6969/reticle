@@ -59,6 +59,9 @@ import { startVerifyServer } from './judgement/runs/verify-server.js';
 import { createMcpServer } from './surface/mcp/mcp.js';
 import { instructionStateAt } from './surface/mcp/mcp-proxy.js';
 import { LEASE_ACQUIRE_TOOL } from './surface/tools/lease-tools.js';
+import { startRemoteDrives } from './features/harness/platform/remote-drive.js';
+import { driveForChat } from './surface/tools/explore-tools.js';
+import { withLinkedCredential } from './surface/tools/harness-explore.js';
 import { runTool } from './surface/tools/invoke-tool.js';
 import {
   SessionReaper,
@@ -716,6 +719,14 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
   // through runTool, so it is counted and reported like any other call rather than being a second,
   // invisible dispatch path. See cli/drive/drive-attach.ts for why attaching beats refereeing the race.
   shared.attachDrive((url) => runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url }));
+  // A drive somebody asked for in the platform's chat, run on this machine: the daemon asks the
+  // platform, never the other way round. See remote-drive.ts.
+  const remoteDrives = startRemoteDrives({
+    env: () => withLinkedCredential(effectiveDeps, process.env),
+    connected: () => 0 < bridge.sessions.count(),
+    drive: (goal) => driveForChat(effectiveDeps, goal),
+    log,
+  });
 
   // Optional OEM/CI verify endpoint: a host platform POSTs to /verify and gets an ReticleVerificationRun,
   // driving the same flow-replay machinery the agent uses — no MCP stdio, no human. Each verdict is
@@ -814,6 +825,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       const vh = verifyHttp;
       if (vh !== undefined) await new Promise<void>((resolve) => vh.server.close(() => resolve()));
       leaseReaper.stop();
+      remoteDrives.stop();
       await cloudSync.flush(); // not stop(): the last run written is the one nobody has yet
       await loopbackAlias.close?.();
       await pool.shutdown();
