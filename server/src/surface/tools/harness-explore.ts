@@ -11,6 +11,7 @@
 import { serverDriver, serverOptionsFromEnv } from '@/features/harness/platform/server-driver.js';
 import { exploreScript } from './harness-script.js';
 import { randomUUID } from 'node:crypto';
+import { harnessRunId } from '@/judgement/runs/drive-run.js';
 import {
   ReticleEnv,
   ReticleTool,
@@ -113,6 +114,8 @@ export interface ExploreResult {
    * comparison. `custom` is an injected driver, which is neither of ours to name.
    */
   driverName: string;
+  /** The run this drive syncs as (`harness-<id>`), so a caller can find it on the platform. */
+  runIds?: readonly string[];
 }
 
 /**
@@ -235,10 +238,11 @@ export async function exploreApp(
 
   // Every action this drive takes carries who took it, so the run it folds into is the Harness's own
   // and not mixed into the run of whichever agent shares the tab.
+  const harnessId = randomUUID();
   const toolset = reticleToolset(deps, {
     ...pinned(options),
     drivenBy: {
-      harness: randomUUID(),
+      harness: harnessId,
       driver: built.name,
       ...(options.focus === undefined ? {} : { persona: options.focus }),
     },
@@ -284,7 +288,16 @@ export async function exploreApp(
     ...reconciled.savedFlows,
     ...reconciled.rewroteFlows,
   ]);
-  return { drive, plan, driverName: built.name, ...reconciled, unverifiedFlows, goals };
+  const runId = harnessRunId(harnessId);
+  return {
+    drive,
+    plan,
+    driverName: built.name,
+    ...reconciled,
+    unverifiedFlows,
+    goals,
+    ...(runId === undefined ? {} : { runIds: [runId] }),
+  };
 }
 
 /** A line in the HUD's Agent Log for the person watching; nobody watching is not an error. */

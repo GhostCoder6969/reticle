@@ -24,7 +24,7 @@ import {
   type ModelDriver,
 } from '@/features/harness/harness.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
-import { noteHarnessGoal } from '@/judgement/runs/drive-run.js';
+import { harnessRunId, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
 import { openSessionIntents } from '@/memory/intent/open-intents.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { leasableAppUrl } from '@/language/flows/flow-tools.js';
@@ -259,6 +259,7 @@ export async function exploreScript(
     ...goalOfRun(run.drives),
   };
   const reconciled = reconcileFlows(before, await reads.flows.list(), run.toolCalls);
+  const runId = harnessRunId(harness);
   const unverifiedFlows = await flowsThatCheckNothing(reads, [
     ...reconciled.savedFlows,
     ...reconciled.rewroteFlows,
@@ -275,6 +276,7 @@ export async function exploreScript(
       (name, args) => ports.toolset(pinned(options).sessionId, focus).invoke(name, args),
       options.goals ?? goalsIn(focus),
     ),
+    ...(runId === undefined ? {} : { runIds: [runId] }),
     planLines: [
       `Plan · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)`,
       ...run.lines,

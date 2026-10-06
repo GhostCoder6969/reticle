@@ -179,6 +179,15 @@ export function harnessAgentId(driver: string): string {
   return 'server' === driver ? 'Reticle Harness (platform)' : `Reticle Harness (${driver})`;
 }
 
+/**
+ * The id of the run a Harness drive syncs as, so whoever started the drive can find it again (the
+ * platform's chat folds the run into the check it asked for). Undefined for an id no run can carry.
+ */
+export function harnessRunId(harness: string): string | undefined {
+  const candidate = `${HARNESS_RUN_PREFIX}${harness}`;
+  return isValidRunId(candidate) ? candidate : undefined;
+}
+
 /** The journey a Harness drive was named for, or what it did when nobody named one. */
 const UNNAMED_JOURNEY = 'Harness drive';
 
@@ -213,10 +222,9 @@ function harnessRunFrom(
   actions: readonly JournalAction[],
   deps: DriveRunDeps,
 ): VerificationRunInput | undefined {
-  const candidate = `${HARNESS_RUN_PREFIX}${by.harness}`;
   const input = driveRunFrom(actions, {
     ...deps,
-    runId: isValidRunId(candidate) ? candidate : defaultRunId(),
+    runId: harnessRunId(by.harness) ?? defaultRunId(),
   });
   if (input === undefined) return undefined;
   const statuses = input.checks.map((check) => check.status);

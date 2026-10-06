@@ -77,6 +77,8 @@ describe('exploring an app', () => {
     const result = await exploreApp(deps, {}, { driver: finishing(''), skipPlatformConfig: true });
     expect(result.savedFlows).toEqual(['checkout', 'login']);
     expect(result.unverifiedFlows).toEqual(['checkout']);
+    // The run it syncs as, so the platform's chat can fold that run into the check it asked for.
+    expect(result.runIds).toEqual([expect.stringMatching(/^harness-[0-9a-f-]{36}$/)]);
   });
 
   it('records the persona as the intent of a saved flow that has none, whoever saved it', async () => {
