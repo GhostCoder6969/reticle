@@ -133,8 +133,54 @@ function Main {
   # 1000x out is worse than one that is coarse.
   $runtimeSecs = [int]($runtimeDone - $started).TotalSeconds
   $installSecs = [int]($installed - $runtimeDone).TotalSeconds
-  & reticle setup install --runtime-secs $runtimeSecs --install-secs $installSecs @args
-  exit $LASTEXITCODE
+  # Same four steps as install.sh, and the same reason the wording lives here: this file is served
+  # from main, so what a new user reads changes on merge, without an npm release.
+  # Step 3: registration stays Node's; its closing tour is cut at its first line. If that line is
+  # ever reworded the cut finds nothing and the full text prints: noisy, never broken.
+  # Native stderr under $ErrorActionPreference = 'Stop' becomes a throwing ErrorRecord (see Check-Node),
+  # so it is relaxed for exactly the two native calls whose stderr is output, not failure.
+  $ErrorActionPreference = 'Continue'
+  $out = & reticle setup install --runtime-secs $runtimeSecs --install-secs $installSecs @args 2>&1
+  $rc = $LASTEXITCODE
+  foreach ($line in $out) {
+    if ("$line" -match 'Reticle is installed\. How it works') { break }
+    Write-Output "$line"
+  }
+  if ($rc -ne 0) { exit $rc }
+
+  # Step 4: a real verdict on Reticle's own demo app, before anything touches the user's project.
+  # A port the OS says is free, run from the temp dir so a crash log never lands in the user's
+  # folder, and never fatal.
+  Say 'Watching Reticle verify a demo app...'
+  # From .NET, not `node -e`: PowerShell strips the inner quotes a JS snippet needs (see Check-Node).
+  $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+  $listener.Start()
+  $port = $listener.LocalEndpoint.Port
+  $listener.Stop()
+  Push-Location $env:TEMP
+  $demo = & reticle tutorial --run --headless --port $port 2>&1
+  $demoRc = $LASTEXITCODE
+  Pop-Location
+  $ErrorActionPreference = 'Stop'
+  if ($demoRc -eq 0) {
+    foreach ($line in $demo) {
+      if ("$line" -notmatch '^\{"t"' -and "$line" -notmatch '^  why:') { Write-Output "$line" }
+    }
+  } else {
+    Say "  skipped: no browser could start here. Reticle is installed; 'reticle doctor' says why."
+  }
+
+  # One next step. Redirected output means an agent ran this, and an agent cannot restart itself.
+  Say ''
+  if (-not [Console]::IsOutputRedirected) {
+    Say "Done. Open your coding agent in your app's folder and ask:"
+    Say '  "Set up Reticle and verify one flow."'
+    Say "Agent already open? Restart it once so it loads Reticle's tools."
+  } else {
+    Say "Done. Next, in the user's app folder: 'reticle init' wires the app and proves it"
+    Say 'connects. The reticle_* tools load when this agent session restarts.'
+  }
+  exit 0
 }
 
 # LAST on purpose, exactly as in install.sh: an `irm | iex` cut off mid-download otherwise runs

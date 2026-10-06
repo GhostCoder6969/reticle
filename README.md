@@ -34,79 +34,31 @@ It drives your real running app, reads what actually happened, and hands back **
 
 ## Install
 
-You need Node **20.11+**. Install Reticle once on your machine, then connect each app you want to verify. The installer registers Reticle's tools with the coding agents it finds; the project command wires your app and checks that a browser session actually connects.
-
-### 1. Install once on your machine
-
-**macOS · Linux**
+One command. Needs Node 20.11+ (no Node? `brew install node` or [nodejs.org](https://nodejs.org)).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.sh | sh
 ```
 
-**Windows** (PowerShell)
+Windows: `irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex`
 
-```powershell
-irm https://raw.githubusercontent.com/reticlehq/reticle/main/install/install.ps1 | iex
-```
-
-The installer installs the `reticle` CLI, registers its MCP server with supported agents, and configures approval for Reticle's own tools where the agent supports it. **Run it in a terminal before opening your coding agent.** If your agent is already open, restart it once so it loads the new tools. Codex CLI needs a manual TOML entry; the installer prints the exact lines and location.
-
-### 2. Ask your agent
-
-Installing changed nothing in your app. Open your coding agent in the app's directory and ask: _“Verify one flow in my running app with Reticle.”_ The first time it uses Reticle there, Reticle wires the app itself: it installs the dev-only SDK, wires your build config, starts your dev server, and tells your agent every file it changed. No account needed, and nothing from your project leaves your machine.
-
-To wire it yourself instead, or to preview the changes first, run `RETICLE_INSTALL_SOURCE=readme reticle init` (or `reticle init --dry-run`) in the app's directory. The `RETICLE_INSTALL_SOURCE` prefix is optional; it only tells us which page you installed from.
-
-**Want a dashboard?** Run `reticle connect --project "My App"` instead, or afterwards. It does everything `init` does, then opens a browser for sign-in approval, links this folder to your cloud project, and sends any Reticle history already on this machine. Approve the short code shown in both the browser and terminal; you do not need to copy an API key. [See exactly what can sync](docs/what-is-recorded.md).
-
-### Check it and start verifying
-
-```bash
-reticle doctor    # is the app connected?
-reticle whoami    # which cloud project is this folder linked to?
-```
-
-Reticle returns a pass, fail, or couldn't-tell verdict with evidence. Your dashboard fills after the first recorded run; a new app has no results to sync yet. If your dev server was already running before Reticle wired it, restart that server once to load the new config.
+It registers Reticle with your coding agents and shows it verifying a demo app, in seconds. Then open your agent in your app's folder and ask: _"Verify one flow in my running app with Reticle."_ The first time it uses Reticle there, it wires the app itself and tells you every file it changed. No account needed, and nothing from your project leaves your machine.
 
 <a id="manual-install"></a>
 <details>
-<summary><b>Manual install</b> (no pipe to shell)</summary>
+<summary>Other ways to install</summary>
 
 <br/>
 
-```bash
-npm install -g @reticlehq/server   # 1. the CLI
-npx @reticlehq/server setup mcp    # 2. register it with your agents
-```
+**Claude Code plugin:** `/plugin marketplace add reticlehq/reticle`, then `/plugin install reticle@reticlehq`.
 
-Step 2 registers the same agents as the installer, writes the `/reticle` skill where the agent supports one, and pre-approves Reticle's own tools the same way. To register nothing automatically, skip step 2 and add the server to your client yourself, which leaves its approval prompts as they are:
+**Skills CLI** (Cursor, Codex, Copilot, Gemini and others): `npx skills add reticlehq/reticle`
 
-```jsonc
-{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }
-```
+**No pipe to shell:** `npm install -g @reticlehq/server && reticle setup mcp`
 
-Then ask your agent to verify a flow, and the first run wires the app; or run `reticle init` in your app directory yourself, or `reticle connect --project "My App"` to also link a cloud dashboard.
+**Any MCP client, by hand:** `{ "mcpServers": { "reticle": { "command": "npx", "args": ["@reticlehq/server", "mcp"] } } }`
 
-</details>
-
-<details>
-<summary><b>Claude Code plugin</b> (skill + MCP in one step)</summary>
-
-<br/>
-
-```text
-/plugin marketplace add reticlehq/reticle
-/plugin install reticle@reticlehq
-```
-
-Registers the MCP server and installs the Reticle skill together. Reopen Claude Code in your app's directory: the first session offers to run `init` there, which wires the app so the tools have something to verify.
-
-For other agents that support the skills CLI:
-
-```bash
-npx skills add reticlehq/reticle
-```
+Wire your app yourself instead of letting your agent do it: `reticle init` in the app's folder. Want a cloud dashboard? `reticle connect --project "My App"`. Not sure it worked? `reticle doctor`.
 
 </details>
 
