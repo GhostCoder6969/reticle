@@ -37,7 +37,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Who to be or what to do; double-quoted text must show at the end (each is checked).',
+          'The journey in plain words; any "quoted text" must be on the page when it ends (checked).',
         ),
       maxSteps: stepCountSchema
         .optional()

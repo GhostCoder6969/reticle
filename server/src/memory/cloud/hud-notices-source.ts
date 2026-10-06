@@ -8,6 +8,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { ReticleEnv } from '@reticlehq/core';
 import { HUD_NOTICES_URL, parseHudNotices, type HudNoticeEntry } from '@reticlehq/core/hud';
 
 /** How long a copy is trusted before it is revalidated. Notices change over days, not minutes. */
@@ -15,6 +16,19 @@ const FRESH_MS = 6 * 60 * 60 * 1_000;
 const TIMEOUT_MS = 5_000;
 /** Overrides the notices URL: self-hosting, staging, tests. */
 const NOTICES_URL_ENV = 'RETICLE_HUD_NOTICES_URL';
+
+/**
+ * The same opt-outs telemetry honours. The notices file carries nothing about anybody, but it is a
+ * request to reticle.sh, and somebody who switched Reticle's outbound calls off asked for none.
+ */
+function outboundOff(env: NodeJS.ProcessEnv): boolean {
+  const telemetry = (env[ReticleEnv.TELEMETRY] ?? '').toLowerCase();
+  const dnt = env[ReticleEnv.DO_NOT_TRACK];
+  return (
+    ['0', 'false', 'off'].includes(telemetry) ||
+    ('string' === typeof dnt && dnt !== '' && dnt !== '0')
+  );
+}
 
 export type NoticesLoad = (
   url: string,
@@ -118,7 +132,7 @@ export function hudNoticesSource(opts: {
     read(): HudNoticeEntry[] {
       const last = Math.max(cached?.fetchedAt ?? 0, askedAt ?? Number.NEGATIVE_INFINITY);
       const stale = cached === undefined && askedAt === undefined ? true : FRESH_MS <= now() - last;
-      if (!inFlight && stale) refresh();
+      if (!inFlight && stale && !outboundOff(process.env)) refresh();
       return entries;
     },
   };

@@ -58,6 +58,14 @@ export const SESSION_TOOLS: ToolDef[] = [
         ...(corner === undefined ? {} : { corner }),
       });
       if (!res.ok) throw new Error(res.error ?? 'session config failed');
+      // Asked to move the HUD and the page says nothing about it: an SDK older than this daemon, or
+      // no HUD mounted. Reported, never `applied: true`: an agent told the HUD moved would test a
+      // control it is still covering.
+      const applied = (res.result as { hud?: unknown } | undefined)?.hud;
+      if ((hud !== undefined || corner !== undefined) && !Array.isArray(applied))
+        throw new Error(
+          'the page did not apply `hud`: its Reticle SDK predates it, or no HUD is mounted. Update the SDK (npx @reticlehq/server update) or test with the HUD where it is.',
+        );
       return res.result ?? { applied: true };
     },
   },

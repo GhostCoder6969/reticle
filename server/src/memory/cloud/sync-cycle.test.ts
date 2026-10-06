@@ -24,7 +24,7 @@ const IMPACT = { counts: { calls: 3, failed: 1 }, days: [] };
 /** A scripted server: hand it the bodies to answer with, read back what it was asked. */
 /**
  * What the real handler answers when the script does not say: a `runs` result for every request,
- * accepting each run it was sent (reticle-cloud `sync.routes.ts`). It used to answer `{}`, which no
+ * accepting each run it was sent, as the platform's sync route does. It used to answer `{}`, which no
  * real server sends, and which hid that a 200 saying nothing about runs was recorded as delivered.
  */
 function realAnswer(body: string | undefined): unknown {

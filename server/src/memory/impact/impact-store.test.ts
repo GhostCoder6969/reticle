@@ -238,7 +238,6 @@ describe('the dashboard link', () => {
   });
 });
 
-/** The rail's notices: chosen by the daemon for THIS machine, never the whole file. */
 describe('the sync status in the snapshot', () => {
   it('is there for a linked project, and absent for one that is not', () => {
     const projectDir = mkdtempSync(join(tmpdir(), 'impact-sync-'));
@@ -274,6 +273,7 @@ describe('Reticle Coverage in the snapshot', () => {
   });
 });
 
+/** The rail's notices: chosen by the daemon for THIS machine, never the whole file. */
 describe('the notices in the snapshot', () => {
   const home = (): string => mkdtempSync(join(tmpdir(), 'impact-notices-home-'));
   const entries = [
@@ -300,6 +300,18 @@ describe('the notices in the snapshot', () => {
       notices: { read: () => [] },
     });
     expect(store.snapshot().notices).toBeUndefined();
+  });
+});
+
+describe('a streak longer than the daily window', () => {
+  it('keeps counting past the days the record keeps', () => {
+    let scope = scopeAt(Date.parse('2026-01-01T10:00:00'));
+    for (let day = 0; day < 60; day++) {
+      const now = Date.parse('2026-01-01T10:00:00') + day * DAY;
+      scope = applyDelta(scope, { verdicts: 1 }, now);
+    }
+    expect(scope.days.length).toBeLessThan(60);
+    expect(scope.records.streakDays).toBe(60);
   });
 });
 

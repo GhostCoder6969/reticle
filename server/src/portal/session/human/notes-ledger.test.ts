@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -39,6 +39,19 @@ describe('the notes ledger', () => {
   });
 
   it('writes nothing when no project is known', () => {
-    expect(() => recordNotes(undefined, [])).not.toThrow();
+    const mark = new ReviewStore().add(data('lost'), 1);
+    const cwdBefore = readdirSync(process.cwd());
+    recordNotes(undefined, [mark]);
+    expect(readdirSync(process.cwd())).toEqual(cwdBefore);
+  });
+
+  it('keeps the newest five hundred, dropping the oldest', () => {
+    const root = mkdtempSync(join(tmpdir(), 'reticle-notes-'));
+    const store = new ReviewStore((marks) => recordNotes(root, marks));
+    for (let i = 0; i < 502; i++) store.add(data(`note ${String(i)}`), i);
+    const { notes } = readNotes(root);
+    expect(Object.keys(notes)).toHaveLength(500);
+    expect(notes[noteKey(data('note 0'))]).toBeUndefined();
+    expect(notes[noteKey(data('note 501'))]?.note).toBe('note 501');
   });
 });

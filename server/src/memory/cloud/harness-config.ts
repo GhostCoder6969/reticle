@@ -81,6 +81,7 @@ export function harnessConfigSource(
       })
       .catch(() => {
         if (startedAtRevision === revision) fetchedAt = now();
+        quiet = false;
         notify();
       })
       .finally(() => {

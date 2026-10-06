@@ -206,7 +206,14 @@ export function applyDelta(
   const records = { ...scope.records };
   records.bestVerdictDay = Math.max(records.bestVerdictDay, todayCounts.verdicts);
   records.bestDefectDay = Math.max(records.bestDefectDay, todayCounts.failed);
-  records.streakDays = streakEndingAtLatest(dates);
+  // The window keeps IMPACT_DAILY_BUCKETS days, so a streak longer than it cannot be read off the
+  // dates alone: when the whole window is one unbroken run, it continues the streak already held.
+  const inWindow = streakEndingAtLatest(dates);
+  const unbroken = inWindow === dates.length && scope.days.length >= IMPACT_DAILY_BUCKETS;
+  const newDay = !scope.days.some((day) => day.date === today);
+  records.streakDays = unbroken
+    ? Math.max(inWindow, scope.records.streakDays + (newDay ? 1 : 0))
+    : inWindow;
   records.bestStreakDays = Math.max(records.bestStreakDays, records.streakDays);
   records.longestRunMs = Math.max(records.longestRunMs, meta.runMs ?? 0);
 

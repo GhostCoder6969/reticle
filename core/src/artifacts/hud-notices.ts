@@ -63,7 +63,7 @@ export const HudNoticeEntrySchema = HudNoticeSchema.extend({
   /** ISO dates. Shown from `from` (inclusive) until `until` (exclusive). */
   from: z.string().optional(),
   until: z.string().optional(),
-  /** Oldest SDK that can show it, e.g. "3.6.0". */
+  /** Oldest SDK that can show it, e.g. "x.y.z". */
   minSdk: z.string().optional(),
   /** Higher shows first. */
   weight: z.number().optional(),

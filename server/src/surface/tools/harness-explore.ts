@@ -134,9 +134,10 @@ export interface ExploreResult {
  * print it, and two copies of this sentence would drift.
  */
 export const MSG_NO_HARNESS_KEY =
-  `No model configured to drive the app: set ${ReticleEnv.HARNESS_KEY}, or run \`reticle link\` and ` +
-  `set ${ReticleEnv.CLOUD_KEY}, to let Reticle explore it for you. Without either, flows are ` +
-  `recorded by your own coding agent through the MCP tools.`;
+  `No model configured to drive the app: set ${ReticleEnv.HARNESS_KEY}, or run \`reticle connect\` ` +
+  `(the platform's model needs a plan or trial), to let Reticle explore it for you. Without either, ` +
+  `drive the journey yourself with reticle_act_and_wait and an \`until\` on its last step: what you ` +
+  `drive is saved as a flow just the same.`;
 
 /** Asked for Jev specifically and it is not configured. Distinct from having no model at all. */
 export const MSG_NO_JEV_KEY =

@@ -1,7 +1,5 @@
 /**
- * Reticle HUD design tokens, adapted from Reticle Cloud's design system.
- *
- * Palette and shape follow apps/console/src/design/{tokens.ts,theme.css}: near-black surfaces,
+ * Reticle HUD design tokens, adapted from the Reticle platform's design system: near-black surfaces,
  * warm white text, saffron brand accent, a 4px spacing rhythm, and 6/10/14px radii. The HUD keeps
  * a compact type scale and a separate session-state accent because it must fit beside the app and
  * still communicate running/paused/ended at a glance.

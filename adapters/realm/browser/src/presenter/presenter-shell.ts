@@ -53,7 +53,6 @@ const TRANSITION_LOCK_MS = 120;
 const CHAT_MIN_LABEL = 'Minimise chat';
 /** The minimised chat capsule's label - it reopens the panel. */
 const CHAT_PILL_LABEL = 'Open agent chat';
-/** The toolbar entry to the impact report. */
 const SETTINGS_LABEL = 'Settings';
 const AGENT_LOG_TITLE = 'Reticle';
 const EXIT_LABEL = 'Exit';
@@ -210,11 +209,10 @@ export class HudShell {
     this.#chatViews.paintAccount(account);
   }
   /**
-   * The last offer push, replayed at mount for the same reason the account one is: the daemon pushes
-   * the impact snapshot on connect, which races this shell's mount, and on an idle page the next
-   * snapshot never comes.
+   * Keep the rail's offer and notices current. Replayed at mount, as the account is: the daemon
+   * pushes the impact snapshot on connect, which races this shell's mount, and on an idle page the
+   * next snapshot never comes.
    */
-  /** Keep the Agent Log carousel current, including when the initial offer push beats mount. */
   paintOffer(offer: OfferState | undefined, notices: readonly unknown[] = []): void {
     this.#pushedOffer = offer;
     this.#pushedNotices = notices;

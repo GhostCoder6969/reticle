@@ -8,14 +8,15 @@
  *
  * A machine that IS linked hears where its work stands: once when the platform first confirms it,
  * then only when that changes (the platform refused a run, a push failed, or it recovered). Silence
- * means it is going up. Pushing is the daemon's job, never the agent's: it syncs after every run.
+ * means it is going up. The daemon pushes after every run; an agent can force one with
+ * `reticle_project { push }`.
  *
  * Remembered in `.reticle`, so a restarted daemon does not repeat itself. Never throws, never blocks
  * a verdict, and an embedder with no link port hears nothing.
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { Verified } from '@reticlehq/core';
+import { ReticleDir, Verified } from '@reticlehq/core';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { FlakeFileSchema } from '@/language/flows/recording/flake.js';
 import {
@@ -36,7 +37,7 @@ const FLAKY_MIN_RUNS = 3;
 const STATUS_EVERY_MS = 10_000;
 /** How many verdicts between size checks: walking `.reticle` is not free either. */
 const SIZE_EVERY = 20;
-const MOMENTS_FILE = 'platform-moments.json';
+const MOMENTS_FILE = ReticleDir.PLATFORM_MOMENTS_FILE;
 const CONNECT = '`npx @reticlehq/server connect`';
 const RUN_FILE = /\.json$/;
 

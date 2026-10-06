@@ -221,7 +221,13 @@ const cmdWhoami = async (): Promise<number> => {
       verify: cloud.verify,
     },
   });
-  if (null === cloud.config) hint('this repo is not attached — run `reticle link`');
+  // Signed out, `link` refuses with "run reticle login first"; `connect` does both in one go.
+  if (null === cloud.config)
+    hint(
+      null === session
+        ? 'this repo is not attached — run `reticle connect` (signs in and links in one step)'
+        : 'this repo is not attached — run `reticle link`',
+    );
   return 0;
 };
 

@@ -21,7 +21,13 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { IntentDir, ReticleDir } from '@reticlehq/core';
-import type { CloudSyncState, PulledIssues, SyncSink, SyncSource } from './sync-cycle.js';
+import {
+  DERIVED_RECORDS,
+  type CloudSyncState,
+  type PulledIssues,
+  type SyncSink,
+  type SyncSource,
+} from './sync-cycle.js';
 import { subjectFor } from '@/memory/intent/intent-subject.js';
 
 const JSON_SUFFIX = '.json';
@@ -86,15 +92,9 @@ function readFlows(root: string): unknown[] {
   }
 }
 
-const DERIVED_FILE = {
-  impact: ReticleDir.IMPACT_FILE,
-  flake: ReticleDir.FLAKE_FILE,
-  intent: ReticleDir.INTENT_FILE,
-  envelopes: ReticleDir.ENVELOPES_FILE,
-  'assertion-tiers': ReticleDir.TIERS_FILE,
-  coverage: ReticleDir.COVERAGE_FILE,
-  notes: ReticleDir.NOTES_FILE,
-} as const;
+const DERIVED_FILE = Object.fromEntries(
+  DERIVED_RECORDS.map((record) => [record.kind, record.file]),
+) as Record<(typeof DERIVED_RECORDS)[number]['kind'], string>;
 
 /** The directory the sharded intent store writes into, beside the legacy flat file. */
 const INTENT_SUBDIR = ReticleDir.INTENT_SUBDIR;

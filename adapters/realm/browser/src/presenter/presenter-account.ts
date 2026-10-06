@@ -297,10 +297,9 @@ export function mountAccountControl(root: HTMLElement, onSignIn?: () => void): (
         return;
       }
 
-      // Every command this menu names is a TERMINAL step -- login, link and logout all write to
-      // `~/.reticle`, which a page cannot do. So the control copies the command rather than
-      // pretending to start it: a button that quietly does nothing is worse than a line of text,
-      // because the person waits for it.
+      // Link and logout write `~/.reticle`, which a page cannot do, so those controls copy the
+      // command rather than pretend to run it. Sign in (below) is the exception: the daemon starts
+      // the browser approval itself.
       const copier = target.closest('[data-reticle-copy]');
       if (copier instanceof HTMLElement) {
         event.preventDefault();

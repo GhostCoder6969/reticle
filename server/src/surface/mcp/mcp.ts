@@ -155,7 +155,11 @@ const COMPACT_PREDICATE_DESCRIPTION = `${PREDICATE_KINDS}${PREDICATE_FIELD_GRAMM
  * schema cost; the first clause keeps each param's purpose and any enum hints. Params without a
  * description pass through unchanged. Predicate params are replaced wholesale — see above.
  */
-function leanZodShape(shape: z.ZodRawShape, predicateAnchor?: string): z.ZodRawShape {
+function leanZodShape(
+  shape: z.ZodRawShape,
+  advertised: ReadonlySet<string>,
+  predicateAnchor?: string,
+): z.ZodRawShape {
   const out: z.ZodRawShape = {};
   // The navigation hint is said ONCE per turn, so it is anchored to one parameter — not one tool.
   // A tool can carry two predicate parameters (a canonical name plus a neighbouring tool's alias),
@@ -181,8 +185,13 @@ function leanZodShape(shape: z.ZodRawShape, predicateAnchor?: string): z.ZodRawS
       out[key] = schema.describe(shared);
       continue;
     }
+    // Through the same rewrite as tool descriptions: a parameter that says "a ref from
+    // reticle_snapshot" names a tool this surface does not have.
     const desc = schema.description;
-    out[key] = 'string' === typeof desc ? schema.describe(firstSentence(desc)) : schema;
+    out[key] =
+      'string' === typeof desc
+        ? schema.describe(liveCallText(firstSentence(desc), advertised))
+        : schema;
   }
   return out;
 }
@@ -347,14 +356,22 @@ export function advertisedConfig(
       // Against the advertised set, for the same reason results are: `reticle_navigate`'s own
       // description told the reader to confirm a reload with `reticle_sessions`, on the surface
       // where that name is gone. A description is advice like any other.
-      liveCallText(
-        terse ? firstSentence(tool.description) : tool.description,
-        new Set(advertised.map((each) => each.name)),
-      ),
+      // Not on the meta-tools: they exist to name what is reachable only through `reticle_run`,
+      // and rewriting those names to advertised ones turned `reticle_tools` into nonsense.
+      isMetaTool
+        ? tool.description
+        : liveCallText(
+            terse ? firstSentence(tool.description) : tool.description,
+            new Set(advertised.map((each) => each.name)),
+          ),
       tool.example,
     ),
     inputSchema: terse
-      ? leanZodShape(tool.inputSchema, tool.name === anchor ? undefined : anchor)
+      ? leanZodShape(
+          tool.inputSchema,
+          new Set(advertised.map((each) => each.name)),
+          tool.name === anchor ? undefined : anchor,
+        )
       : tool.inputSchema,
     ...(outputSchema !== undefined ? { outputSchema } : {}),
   };

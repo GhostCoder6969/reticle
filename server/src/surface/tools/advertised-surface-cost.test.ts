@@ -146,7 +146,7 @@ const bytesOf = (json: string): number => Buffer.byteLength(json, 'utf8');
 const DEFAULT_SURFACE_BYTE_BUDGET = 25_650;
 // Raised, each time deliberately, each time with the measurement that bought it.
 //
-// LATEST RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
+// RAISE, 24_600 -> 24_700. `reticle_verify { action: "explore" }` gained a `driver`
 // parameter and a `rewroteFlows` output field: 86 B on the wire (24,600 -> 24,686, ~21
 // tokens/turn) against 0 B of headroom. The prose was cut first — the parameter description went
 // through three rewrites and lost half its length — and 86 B is what is left once the enum's two

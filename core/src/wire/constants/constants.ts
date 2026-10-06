@@ -115,6 +115,9 @@ export const LOOPBACK_HOST = '127.0.0.1';
  * here and nowhere else. The values are the literal process.env keys.
  */
 export const ReticleEnv = {
+  /** "0"/"false"/"off" turns off telemetry and every optional outbound call; DO_NOT_TRACK too. */
+  TELEMETRY: 'RETICLE_TELEMETRY',
+  DO_NOT_TRACK: 'DO_NOT_TRACK',
   /** Shared-secret the browser SDK must present in HELLO; absent ⇒ loopback-trust only. */
   TOKEN: 'RETICLE_TOKEN',
   /** Bridge bind host. Defaults to loopback; setting anything else is opt-in remote exposure. */
@@ -460,6 +463,9 @@ export const ReticleDir = {
   COVERAGE_FILE: 'coverage.json',
   /** Human review marks (HUD notes), pending and resolved — see server portal/session/human. */
   NOTES_FILE: 'notes.json',
+  /** The user's latest request, as the agent relayed it. Local: it is the user's own words. */
+  REQUEST_FILE: 'request.json',
+  PLATFORM_MOMENTS_FILE: 'platform-moments.json', // moments already said, so each is said once
   /**
    * the project's cloud binding — .reticle/cloud.json, written by `reticle link`. Git-checked and
    * non-secret: the project id, the API origin, and where its dashboard lives. The KEY lives in

@@ -41,10 +41,10 @@ const SYNC_PULL_PATH = '/v1/sync/pull';
 /**
  * The derived records that ride along with runs, and the file each one lives in.
  *
- * A list rather than three hand-written blocks so adding a fourth is one line and cannot be
- * half-done — the bundle, the hashing and the reporting all walk this.
+ * One list, so adding a record is one line and cannot be half-done: the bundle, the hashing, the
+ * reporting and the disk source (`sync-disk.ts`) all read it.
  */
-const DERIVED_RECORDS = [
+export const DERIVED_RECORDS = [
   { kind: 'impact', file: ReticleDir.IMPACT_FILE },
   { kind: 'flake', file: ReticleDir.FLAKE_FILE },
   { kind: 'intent', file: ReticleDir.INTENT_FILE },

@@ -166,7 +166,7 @@ export const PROJECT_TOOLS: ToolDef[] = [
         return withCloud({
           error:
             read.reason === ProjectReadError.MISSING
-              ? 'no .reticle/project.json yet — run a flow (reticle_flow_replay) or reticle_run_record first'
+              ? 'no .reticle/project.json yet — the first verified run writes it: drive one step with reticle_act_and_wait and an `until`'
               : '.reticle/project.json is malformed — it will self-heal on the next recorded run',
           reason: read.reason,
         });

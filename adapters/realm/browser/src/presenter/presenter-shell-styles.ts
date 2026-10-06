@@ -60,12 +60,8 @@ export const SHELL_CSS = `
   position:fixed;right:20px;bottom:20px;left:auto;
   z-index:2147483647;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:8px;
   overflow:visible;max-width:calc(100vw - 24px);font-family:var(--reticle-font);-webkit-font-smoothing:antialiased;
-  /**
-   * ONE width for the dock and the chat above it. They were 420px and 320px, so the toolbar
-   * overhung the panel it belongs to and the pair read as two unrelated widgets.
-   */
-  /* ONE width for the chat, the capsule and the toolbar. It used to be 440 with a "compact" 340
-     toggle; 340 is the size that actually reads well beside an app, so it is simply the size. */
+  /* ONE width for the chat, the capsule and the toolbar: the dock-width token. Two widths made the
+     toolbar overhang the panel it belongs to, and the pair read as two unrelated widgets. */
   --reticle-dock-w:var(--reticle-hud-dock-width,400px);
   /* The log is the reason the panel exists, so it gets the height rather than the chrome. */
   --reticle-chat-h:var(--reticle-hud-panel-height,680px);
@@ -75,11 +71,9 @@ export const SHELL_CSS = `
 [${DOCK_ATTR}][data-on="1"]{opacity:1;transform:translate3d(0,0,0);pointer-events:none;}
 [${DOCK_ATTR}][data-on="0"]{opacity:0;pointer-events:none;}
 /**
- * The panel is GLASS, tinted by the state colour, with the glow sitting behind it - restored from
- * the version before this one, where a flat near-black card had replaced it. Kept at ~92% opacity
- * rather than a real backdrop-filter: blur(24px) here was measured as the single most expensive
- * thing in the whole SDK (+4pp of main thread on the hostile fixture), and the tint buys the look
- * without the bill.
+ * The panel is painted by HUD_GLASS_PAINT: an opaque navy fill, lit by the state colour, with that
+ * colour glowing behind it. No backdrop-filter: blur(24px) here was measured as the single most
+ * expensive thing in the whole SDK.
  */
 [${CHAT_PANEL}]{
   ${HUD_GLASS_PAINT}

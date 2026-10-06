@@ -1,8 +1,7 @@
 /**
- * Compact, text-first cards shown beside the project capsule in the chat footer.
- *
- * The value proposition is always available; a time-sensitive harness offer joins the rotation only
- * when the platform confirms that it applies and supplies a real destination.
+ * Text-first cards for the rail under every open page: a live Harness offer first, when the
+ * platform confirms it applies, then the daemon's notices, or the bundled value slides when it sent
+ * none.
  */
 import { offerHtml, type OfferState } from './offer-card.js';
 import type { Slide } from './carousel.js';

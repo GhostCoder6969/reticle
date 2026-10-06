@@ -48,6 +48,7 @@ import {
   type Verification,
   type VersionChange,
 } from '@reticlehq/core/telemetry';
+import { ReticleEnv } from '@reticlehq/core';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 
 const RETICLE_DIR = join(homedir(), '.reticle');
@@ -136,8 +137,8 @@ import { gitFacts } from './git-facts.js';
 import { currentAutomationHint } from './automation-hint.js';
 
 const Env = {
-  DISABLE: 'RETICLE_TELEMETRY', // "0" / "false" / "off" → disabled
-  DO_NOT_TRACK: 'DO_NOT_TRACK', // the cross-tool opt-out convention (any truthy value)
+  DISABLE: ReticleEnv.TELEMETRY, // "0" / "false" / "off" → disabled
+  DO_NOT_TRACK: ReticleEnv.DO_NOT_TRACK, // the cross-tool opt-out convention (any truthy value)
   URL: 'RETICLE_TELEMETRY_URL', // override the PostHog host (EU cloud / self-hosted)
   FILE: 'RETICLE_TELEMETRY_FILE', // record to a local JSONL file and send NOTHING — see the sink note
   KEY: 'RETICLE_TELEMETRY_KEY', // override the PostHog project key
