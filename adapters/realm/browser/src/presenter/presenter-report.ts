@@ -179,6 +179,28 @@ function defects(scope: ImpactScope, dashboardUrl: string | undefined): string {
 }
 
 /**
+ * The sync status beside Sync now: synced, waiting, or refused, with the daemon's own sentence on
+ * hover. Every value is checked here: numbers are numbers, the status is one this HUD knows, and the
+ * sentence is escaped.
+ */
+function syncStatusHtml(sync: Readonly<Record<string, unknown>> | undefined): string {
+  if (sync === undefined) return '';
+  const num = (key: string): number => ('number' === typeof sync[key] ? sync[key] : 0);
+  const status = sync['status'];
+  const label =
+    'refused' === status
+      ? `${String(num('refused'))} refused`
+      : 'pending' === status
+        ? `${String(num('pending'))} waiting`
+        : 'on-platform' === status
+          ? `Synced · ${String(num('onPlatform'))}`
+          : undefined;
+  if (label === undefined) return '';
+  const said = 'string' === typeof sync['said'] ? sync['said'] : '';
+  return `<span class="reticle-sync-status" data-reticle-sync-status="${status as string}" title="${esc(said)}">${label}</span>`;
+}
+
+/**
  * Reticle Coverage: the headline is controls PROVED, the level that is evidence rather than a visit;
  * the rest show beside it. Only levels this HUD knows are rendered, so a key from the daemon is never
  * printed as text, and numbers are rounded before they touch the markup.
@@ -202,6 +224,8 @@ export function reportBodyHtml(
   projectName?: string,
   /** This project's coverage. Passed only for the project scope: it is not a machine-wide number. */
   coverage?: Readonly<Record<string, number>>,
+  /** Where this project's work stands with the platform. Project scope only, linked only. */
+  sync?: Readonly<Record<string, unknown>>,
 ): string {
   const c = scope.counts;
   if (0 === c.calls) return `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`;
@@ -241,7 +265,7 @@ export function reportBodyHtml(
    * it is about. This is a control, and a control somebody has to scroll a panel to find is one they
    * will not find. The two never both render — `localOnly` is gated on there being NO dashboard.
    */
-  const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}</div>`;
+  const identity = `<div class="reticle-report-identity">${accountControlHtml(account, { dashboardUrl, projectName, verdicts: c.verdicts, defects: c.failed })}${syncButtonHtml(dashboardUrl)}${syncStatusHtml(sync)}</div>`;
   return `<div class="reticle-report-top">${streak}${identity}</div>${hero}${verdicts}${coverageHtml(coverage)}<div class="reticle-report-grid">${cards}</div>${defects(scope, dashboardUrl)}${chart(scope)}${localOnly(scope, dashboardUrl, account)}`;
 }
 
@@ -443,6 +467,7 @@ export class PresenterReport {
             this.#snapshot?.account,
             this.#snapshot?.projectName,
             this.#global ? undefined : this.#snapshot?.coverage,
+            this.#global ? undefined : this.#snapshot?.sync,
           );
   }
 

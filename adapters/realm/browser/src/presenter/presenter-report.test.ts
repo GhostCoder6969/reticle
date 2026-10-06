@@ -551,3 +551,28 @@ describe('Reticle Coverage on the Impact page', () => {
     expect(html).not.toContain('Reticle Coverage');
   });
 });
+
+describe('the sync status beside Sync now', () => {
+  const SCOPE = scope({ calls: 3, verdicts: 2, passed: 2 });
+  const at = (sync: Record<string, unknown>) =>
+    reportBodyHtml(
+      SCOPE,
+      'https://app.reticle.sh/projects/x',
+      { signedIn: true },
+      'x',
+      undefined,
+      sync,
+    );
+
+  it('says synced, waiting or refused, with the daemon sentence on hover', () => {
+    expect(at({ status: 'on-platform', onPlatform: 12, said: 'all up' })).toContain('Synced · 12');
+    expect(at({ status: 'pending', pending: 2 })).toContain('2 waiting');
+    const refused = at({ status: 'refused', refused: 1, said: 'r1: <b>bad</b>' });
+    expect(refused).toContain('1 refused');
+    expect(refused).not.toContain('<b>bad</b>');
+  });
+
+  it('shows nothing for a status it does not know', () => {
+    expect(at({ status: '<script>' })).not.toContain('reticle-sync-status');
+  });
+});

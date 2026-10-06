@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IMPACT_DEFECT_LIMIT, emptyImpactCounts } from '@reticlehq/core';
@@ -239,6 +239,25 @@ describe('the dashboard link', () => {
 });
 
 /** The rail's notices: chosen by the daemon for THIS machine, never the whole file. */
+describe('the sync status in the snapshot', () => {
+  it('is there for a linked project, and absent for one that is not', () => {
+    const projectDir = mkdtempSync(join(tmpdir(), 'impact-sync-'));
+    const reticleRoot = join(projectDir, '.reticle');
+    const base = {
+      globalRoot: mkdtempSync(join(tmpdir(), 'impact-sync-home-')),
+      notices: { read: () => [] },
+    };
+    expect(new ImpactStore({ ...base, reticleRoot }).snapshot()).not.toHaveProperty('sync');
+    mkdirSync(reticleRoot, { recursive: true });
+    writeFileSync(
+      join(reticleRoot, 'cloud.json'),
+      JSON.stringify({ dashboardUrl: 'https://app.reticle.sh/p/x' }),
+    );
+    const linked = new ImpactStore({ ...base, reticleRoot }).snapshot();
+    expect(linked.sync).toMatchObject({ status: 'on-platform', runs: 0, onPlatform: 0 });
+  });
+});
+
 describe('Reticle Coverage in the snapshot', () => {
   it('carries the levels its source reports, and nothing when there is none', () => {
     const base = {

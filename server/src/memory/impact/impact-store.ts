@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { describeSync, overallStatus, readSyncSummary } from '@/memory/project/sync-status.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { readAccountState } from '@/memory/cloud/account-state.js';
@@ -123,6 +124,8 @@ function writeScope(path: string, scope: ImpactScope): void {
 
 /** The daemon's cached copy of the HUD notices file, beside the machine-wide impact record. */
 const HUD_NOTICES_CACHE_FILE = 'hud-notices.json';
+/** How long a sync status is reused before it is read again. */
+const SYNC_STATUS_EVERY_MS = 10_000;
 /** When the caller did not say which build this is: matches only notices with no `minSdk`. */
 const UNKNOWN_SDK_VERSION = '0.0.0';
 
@@ -234,6 +237,9 @@ export function applyDelta(
  */
 export class ImpactStore {
   readonly #paths: ImpactPaths;
+  readonly #root: string;
+  /** The sync status, re-read at most every SYNC_STATUS_EVERY_MS: it reads every run file. */
+  #sync: { at: number; value: Record<string, unknown> } | undefined;
   readonly #now: () => number;
   readonly #projectName: string | undefined;
   readonly #dashboardUrl: string | undefined;
@@ -284,6 +290,7 @@ export class ImpactStore {
     this.#now = opts.now ?? ((): number => Date.now());
     this.#projectName = opts.projectName;
     this.#dashboardUrl = readDashboardUrl(opts.reticleRoot);
+    this.#root = opts.reticleRoot;
     // The claim happens in the console, so the link this project was linked to IS the claim link —
     // built here rather than in the HUD, which has no way to know where this project points.
     this.#offer = opts.offer ?? harnessOfferSource(process.env, () => this.#dashboardUrl);
@@ -299,6 +306,24 @@ export class ImpactStore {
     const now = this.#now();
     this.#project = readScope(this.#paths.project, now);
     this.#global = readScope(this.#paths.global, now);
+  }
+
+  #syncStatus(): Record<string, unknown> {
+    const now = this.#now();
+    if (this.#sync !== undefined && now - this.#sync.at < SYNC_STATUS_EVERY_MS)
+      return this.#sync.value;
+    const summary = readSyncSummary(this.#root, true);
+    const value = {
+      status: overallStatus(summary),
+      runs: summary.runs,
+      onPlatform: summary.onPlatform,
+      pending: summary.pending,
+      refused: summary.refused.length + summary.refusedMore,
+      ...(summary.lastPushAt === undefined ? {} : { lastPushAt: summary.lastPushAt }),
+      said: describeSync(summary, now),
+    };
+    this.#sync = { at: now, value };
+    return value;
   }
 
   /** Notified after every fold, so the HUD can be pushed a fresh snapshot. */
@@ -350,6 +375,9 @@ export class ImpactStore {
     if (0 < notices.length) snap.notices = notices;
     const coverage = this.#coverage?.();
     if (coverage !== undefined) snap.coverage = coverage;
+    // Only for a linked project: an unlinked one has nothing on the platform, and the HUD already
+    // offers the way to link it.
+    if (this.#dashboardUrl !== undefined) snap.sync = this.#syncStatus();
     return snap;
   }
 

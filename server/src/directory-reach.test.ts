@@ -450,7 +450,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tape',
     'tools',
   ],
-  impact: ['cloud', 'session'],
+  // `project` for where this project's work stands with the platform, shown beside Sync now.
+  impact: ['cloud', 'project', 'session'],
   // `read` for `shapeQueryResult`: the scrolling find answers in the SAME shape as a plain find,
   // and sharing the shaper is what stops `scroll: true` being a different tool wearing one name.
   // One way only — `read` reaches nothing, which is the property that keeps it movable.

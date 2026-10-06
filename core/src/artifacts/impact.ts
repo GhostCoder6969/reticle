@@ -271,6 +271,11 @@ export const ImpactSnapshotSchema = z.object({
    * `proved` controls, `executed` code, ...). Numbers only. Absent until something was measured.
    */
   coverage: z.record(z.number()).optional(),
+  /**
+   * Where this project's work stands with the platform (status, runs on it, waiting, refused, last
+   * push, and the sentence describing it). Loose here, shaped by the daemon's sync-status.
+   */
+  sync: z.record(z.unknown()).optional(),
 });
 export type ImpactSnapshot = z.infer<typeof ImpactSnapshotSchema>;
 
