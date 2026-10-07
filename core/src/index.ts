@@ -119,6 +119,7 @@ export * from './artifacts/impact-savings.js'; // the savings model - one file, 
 export {
   CONTRACT_FINGERPRINT,
   CONTRACT_PARTS,
+  RETIRED_WIRE_NAMES,
   fnv1a,
   fingerprintOf,
 } from './identity/contract-fingerprint.js';
