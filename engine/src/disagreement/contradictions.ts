@@ -352,6 +352,7 @@ function findWindowContradictions(
 
   // ── A money value written back at the wrong SCALE ───────────────────────────────────────────
   found.push(...findUnitMismatches(events, options.prior ?? []));
+  found.push(...findStalledPagination(events, options.prior ?? []));
 
   // ── The action landed on something that does not react ──────────────────────────────────────
   // Checked first and returned alone: nothing is attributable to the action, so every rule below is
@@ -821,4 +822,97 @@ function findWindowContradictions(
   // Consumer rules run LAST and over the same app-only window, so a service embedding this engine
   // adds to the verdict rather than forking the file that produces it.
   return [...found, ...runRegisteredFolds(events, options)];
+}
+
+// ── Pagination ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The page label moved and the request did not.
+ *
+ * Measured on a real payments dashboard: "Next" relabels the table "Page 2 of 6" and the app
+ * refetches `GET /payments?page=1`, so 103 of 128 rows can never be reached. Every channel looks
+ * healthy on its own: the request is a 200, the label changed, the table rendered rows. The
+ * disagreement is between the label and the query string.
+ *
+ * Fires only on direct evidence, never on a guess: the window must show the label's page number
+ * changing AND a GET to the same endpoint carrying the same page parameter the last one carried.
+ * Client-side paging that fetches nothing is legitimate and stays silent.
+ */
+
+/** Query parameters that say which page of a list is being asked for. */
+const PAGE_PARAMS = ['page', 'offset', 'cursor', 'after', 'start', 'skip', 'from'] as const;
+
+/** "Page 2", "page 2 of 6", "2 / 6", "2 of 6". */
+const PAGE_LABEL = /\bpage\s+(\d+)\b|\b(\d+)\s*(?:of|\/)\s*\d+\b/i;
+
+function pageNumber(text: unknown): number | undefined {
+  if ('string' !== typeof text) return undefined;
+  const match = PAGE_LABEL.exec(text);
+  const raw = match?.[1] ?? match?.[2];
+  return raw === undefined ? undefined : Number(raw);
+}
+
+/** The endpoint and its page parameter, for a GET that carries one. */
+function pageRequest(
+  event: ReticleEvent,
+): { path: string; param: string; value: string } | undefined {
+  if (event.type !== EventType.NET_REQUEST) return undefined;
+  const method = event.data['method'];
+  if ('string' !== typeof method || 'GET' !== method.toUpperCase()) return undefined;
+  const raw = event.data['url'];
+  if ('string' !== typeof raw) return undefined;
+  let url: URL;
+  try {
+    url = new URL(raw, 'http://app.invalid');
+  } catch {
+    return undefined;
+  }
+  for (const param of PAGE_PARAMS) {
+    const value = url.searchParams.get(param);
+    if (value !== null) return { path: url.pathname, param, value };
+  }
+  return undefined;
+}
+
+/**
+ * @param prior events before the window: where the last page request to each endpoint is learned.
+ */
+export function findStalledPagination(
+  events: readonly ReticleEvent[],
+  prior: readonly ReticleEvent[] = [],
+): OwnContradiction[] {
+  const moved = events.flatMap((event) => {
+    if (event.type !== EventType.DOM_TEXT) return [];
+    const now = pageNumber(event.data['text']);
+    const before = pageNumber(event.data['old']);
+    return now !== undefined && before !== undefined && now !== before ? [{ before, now }] : [];
+  });
+  const label = moved[0];
+  if (label === undefined) return [];
+
+  const last = new Map<string, { param: string; value: string }>();
+  for (const event of prior) {
+    const request = pageRequest(event);
+    if (request !== undefined) last.set(request.path, request);
+  }
+  for (const event of events) {
+    const request = pageRequest(event);
+    if (request === undefined) continue;
+    const previous = last.get(request.path);
+    if (
+      previous !== undefined &&
+      previous.param === request.param &&
+      previous.value === request.value
+    )
+      return [
+        {
+          kind: ContradictionKind.PAGINATION_NOT_FETCHED,
+          claim: `the page label moved from ${String(label.before)} to ${String(label.now)}`,
+          counter: `the app asked ${request.path} for ${request.param}=${request.value} again — the same page it already had`,
+          detail: `${String(event.data['url'])} — the rows shown are still the earlier page, so everything past it cannot be reached`,
+        },
+      ];
+    last.set(request.path, request);
+  }
+  return [];
 }

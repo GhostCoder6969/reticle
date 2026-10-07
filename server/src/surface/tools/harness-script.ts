@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { ReticleCommand, ScriptStatus } from '@reticlehq/core';
+import { ReticleCommand, ReticleTool, ScriptStatus } from '@reticlehq/core';
 import { PromptContextSchema, checkScript, type DriveScript } from '@reticlehq/core/artifacts';
 import {
   runScript,
@@ -22,6 +22,7 @@ import {
   StopReason,
   type HarnessResult,
   type ModelDriver,
+  type ToolOutcome,
 } from '@/features/harness/harness.js';
 import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { harnessRunId, noteHarnessGoal } from '@/judgement/runs/drive-run.js';
@@ -218,6 +219,11 @@ export async function exploreScript(
     `Harness plan from the platform · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)` +
       (1 < ports.parallel ? `, ${String(ports.parallel)} at once` : ''),
   );
+  // The whole app, before any journey: a crawl clicks every reachable control (nothing destructive)
+  // and finds what no journey is aimed at — a nav link that renders nothing, a dead control, an
+  // error in the console. On the merchant dashboard eight blank pages went unreported without it.
+  const crawled =
+    focus === undefined ? await crawlApp(deps, options, harness, driverName) : undefined;
   let run: ScriptRun;
   try {
     run = await runScript(script, ports, (view) => {
@@ -258,7 +264,7 @@ export async function exploreScript(
       .filter((t) => 0 < t.length)
       .join('\n'),
     steps: run.toolCalls.length,
-    toolCalls: run.toolCalls,
+    toolCalls: crawled === undefined ? run.toolCalls : [crawled, ...run.toolCalls],
     usage: {
       input: sum((r) => r.usage.input),
       output: sum((r) => r.usage.output),
@@ -360,4 +366,26 @@ async function savePlan(
 function goalOfRun(drives: readonly HarnessResult[]): { goalMet?: boolean } {
   const judged = drives.flatMap((d) => (d.goalMet === undefined ? [] : [d.goalMet]));
   return 0 === judged.length ? {} : { goalMet: judged.every(Boolean) };
+}
+
+/** Controls the opening crawl clicks: enough for a dashboard's navigation and its main buttons. */
+const CRAWL_STEPS = 30;
+
+/** The opening crawl, as one recorded call. Undefined when it could not run; the plan runs anyway. */
+async function crawlApp(
+  deps: ToolDeps,
+  options: ExploreOptions,
+  harness: string,
+  driver: string,
+): Promise<ToolOutcome | undefined> {
+  const args = { maxSteps: CRAWL_STEPS };
+  try {
+    const result = await reticleToolset(deps, {
+      ...pinned(options),
+      drivenBy: { harness, driver },
+    }).invoke(ReticleTool.CRAWL, args);
+    return { id: 'crawl', name: ReticleTool.CRAWL, args, result, isError: false };
+  } catch {
+    return undefined;
+  }
 }

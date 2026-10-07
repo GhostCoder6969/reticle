@@ -18,6 +18,7 @@
  * leaving a verdict of `unknown` to be read as a pass.
  */
 
+import { appFindings } from './app-findings.js';
 import { asRecord, asString, ReticleTool, Verified } from '@reticlehq/core';
 import type { ToolOutcome } from './harness.js';
 
@@ -387,6 +388,7 @@ export function describeDrive(
     ...(0 === pages.length
       ? []
       : [`Reached ${String(pages.length)} page(s): ${pages.join(' → ')}.`]),
+    ...appFindings(toolCalls),
   ];
 
   const listed = [...failed, ...proved, ...undecided].slice(
