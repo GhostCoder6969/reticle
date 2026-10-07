@@ -41,6 +41,7 @@ import {
   holdKey,
   pressCombo,
   closeModalOnEscape,
+  keyboardEvent,
 } from './actions-press.js';
 
 /**
@@ -702,7 +703,7 @@ async function dispatchOther(
       // agent pressing Escape would otherwise switch off a mode the person turned on.
       const down = asSyntheticInput(() =>
         el.dispatchEvent(
-          new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
+          keyboardEvent('keydown', { key, code, bubbles: true, cancelable: true, ...mods }),
         ),
       );
       closeModalOnEscape(el, key, down); // on keydown, as a browser does, before any hold
@@ -714,7 +715,7 @@ async function dispatchOther(
       const hold = clampHoldMs(args['holdMs']);
       if (hold > 0) await holdKey(el, key, code, mods, hold);
       asSyntheticInput(() =>
-        el.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
+        el.dispatchEvent(keyboardEvent('keyup', { key, code, bubbles: true, ...mods })),
       );
       return !down;
     }
