@@ -142,7 +142,9 @@ async function oneRun(index) {
     return child;
   };
   // The daemon first: it writes the pairing token the app's build plugin reads when it starts.
-  start('node', [CLI, '_daemon', '--port', String(daemonPort)], { cwd: home, env }, 'daemon.log');
+  // In the app's folder, as a person starts it: an app with no project config keeps its flows
+  // under the daemon's folder, and the private home is deleted after every run.
+  start('node', [CLI, '_daemon', '--port', String(daemonPort)], { cwd: appDir, env }, 'daemon.log');
   await waitFor(
     () => existsSync(join(home, '.reticle', 'pairing-token')),
     CONNECT_TIMEOUT_MS,
@@ -208,14 +210,26 @@ async function oneRun(index) {
   writeFileSync(join(dir, 'agent-stream.jsonl'), agent.stdout ?? '');
   await page.screenshot({ path: join(dir, 'end.png') }).catch(() => undefined);
   await browser.close();
-  for (const child of children) child.kill();
+  // Stopped and waited for: a daemon told to stop still writes its state on the way out, and
+  // deleting its home under it failed the run.
+  await Promise.all(
+    children.map(
+      (child) =>
+        new Promise((done) => {
+          if (child.exitCode !== null) return done(undefined);
+          child.once('exit', () => done(undefined));
+          child.kill();
+          setTimeout(() => done(undefined), 10_000).unref();
+        }),
+    ),
+  );
   if (existsSync(join(appDir, '.reticle', 'flows')))
     cpSync(join(appDir, '.reticle', 'flows'), join(dir, 'flows-after'), { recursive: true });
   writeFileSync(
     join(dir, 'metrics.json'),
     JSON.stringify({ arm, model, wallMs, ...metrics(dir) }, null, 2),
   );
-  rmSync(home, { recursive: true, force: true });
+  rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
   console.log(`${arm} #${String(index + 1)} → ${dir}`);
 }
 

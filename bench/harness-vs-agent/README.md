@@ -47,3 +47,15 @@ Ground truth: 23 defects (`reticle-fixtures/.../bench-harness/GROUND-TRUTH.md`).
 | `harness-app`, with crawl, reconcile and the pagination check | 2, 4, 2 | B02 B07 B10 B11 B22 | ~0.15 | ~80s |
 
 What moved it: the crawl (B22, blank pages), comparing each page with the API (B07, B10, B11), and the new pagination contradiction (B12 in an earlier run). What did not: Harness decisions per run stayed at 120–190 on this app, because most journeys fail (the app is full of planted defects) and a failed journey is driven again, never replayed. Run-to-run variance is still large.
+
+## A cleaner app: `apps/bench-app` (2026-10-07)
+
+Three consecutive whole-app runs, empty memory, no ground truth (credit use is the question).
+
+| Run | Harness decisions (Jev) | Fill values written (model) | Flows replayed |
+| --- | ----------------------: | --------------------------: | -------------: |
+| 1   |                      29 |                          15 |              0 |
+| 2   |                      62 |                          29 |              3 |
+| 3   |                      64 |                          28 |              4 |
+
+Decisions did not fall. Every persona journey on this app ends at sign-in with a check like "an error is shown", and the engine can claim a request, a signal or a page change but cannot check text on screen, so those goals are judged unmet, nothing is remembered as a route, and the journeys are driven again. Saved flows did persist and replay once the daemon ran in the app's folder.
