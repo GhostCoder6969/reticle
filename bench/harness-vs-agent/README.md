@@ -1,0 +1,37 @@
+# Harness versus agent
+
+Does the Reticle Harness find what a coding agent driving Reticle's tools finds, and at what cost? Each arm runs a real agent (`claude -p`) against a real app in a real browser. The run is scored against the app's ground truth, and every number comes from files the run wrote.
+
+| Arm               | What the calling agent is told                            |
+| ----------------- | --------------------------------------------------------- |
+| `agent-app`       | verify the whole app itself with Reticle's tools          |
+| `harness-app`     | hand the whole app to the Harness (`explore`, no persona) |
+| `agent-journey`   | verify one named journey itself                           |
+| `harness-journey` | hand that journey to the Harness                          |
+
+## Run
+
+```sh
+pnpm build
+export BENCH_APP_DIR=…/reticle-fixtures/local/razorpay-blade-reticle/merchant-dashboard
+export BENCH_APP_PORT=5273
+# Harness arms only: a linked project on the platform.
+export RETICLE_CLOUD_URL=… RETICLE_API_KEY=…
+node bench/harness-vs-agent/run.mjs --arm harness-app --runs 3
+BENCH_GROUND_TRUTH=…/bench-harness/GROUND-TRUTH.md node bench/harness-vs-agent/judge.mjs bench/artifacts/harness-vs-agent/*
+node bench/harness-vs-agent/report.mjs
+```
+
+`--keep-flows` keeps the app's saved flows between runs, which is how a repeat run (replay, learned paths) is measured; without it every run starts from no flows.
+
+## What each column means
+
+- **defects**: ground-truth IDs the run's report identified. A model judges, but every credit must quote the report, and a credit whose quote is not in the report is dropped mechanically.
+- **checks**: the run's declared checks that held, failed, or could not be decided.
+- **wrong guesses**: checks that claimed a request when none was sent. Those failures are the drive's own mistake, not the app's.
+- **agent $**: what the calling agent spent. Harness decisions are metered on the platform (credits), not here.
+
+## Caveats
+
+- One run is an anecdote: agents vary run to run (the same arm has found 9 and 3). Compare medians of at least three runs.
+- The judge reads the final report only. A defect the drive saw and the report left out scores as missed, which is fair to the person reading the report and unfair to the evidence.
