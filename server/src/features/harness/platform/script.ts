@@ -91,6 +91,11 @@ export async function proposeScript(
           needs: flow.needs ?? [],
           steps: flow.steps.map(stepHash),
           commits: flow.steps.flatMap((step, i) => (StepEffect.COMMITS === step.effect ? [i] : [])),
+          // How much it proves: a journey whose flows assert nothing is driven again, not replayed.
+          checks: flow.steps.filter(
+            (step) =>
+              step.expect !== undefined || true === step.steps?.some((s) => s.expect !== undefined),
+          ).length,
         })),
         replay: ask.replay,
         goals: ask.goals,

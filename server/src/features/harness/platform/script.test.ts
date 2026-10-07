@@ -152,3 +152,40 @@ describe('how a plan went', () => {
     });
   });
 });
+
+/** A journey is replayed instead of re-driven only when its flows assert something. */
+describe('what a flow is sent with', () => {
+  it('carries how many of its steps assert a consequence', async () => {
+    let body = '';
+    await proposeScript(
+      { url: 'https://p', apiKey: 'k' },
+      {
+        about: '',
+        flows: [
+          {
+            name: 'refund',
+            version: 1,
+            steps: [
+              { tool: 'reticle_act', anchor: { kind: 'testid', value: 'a' }, action: 'click' },
+              {
+                tool: 'reticle_act',
+                anchor: { kind: 'testid', value: 'b' },
+                action: 'click',
+                expect: { kind: 'net', method: 'POST', urlContains: '/refund' },
+              },
+            ],
+          } as never,
+        ],
+        replay: [],
+        goals: [],
+        gaps: [],
+        rules: [],
+      },
+      (_url, init) => {
+        body = 'string' === typeof init.body ? init.body : '';
+        return Promise.resolve(new Response('{}', { status: 500 }));
+      },
+    );
+    expect((JSON.parse(body) as { flows: { checks: number }[] }).flows[0]?.checks).toBe(1);
+  });
+});
