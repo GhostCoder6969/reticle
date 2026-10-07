@@ -1743,6 +1743,45 @@ describe('absence and negation hold like a count — a late error must not pass'
     );
     expect((await verdict).pass).toBe(true);
   }, 3_000);
+
+  // #1344: a click handler that calls `setTimeout(() => console.error('boom'), 800)`. A hold of
+  // 300ms passed the step and the error landed in nobody's window.
+  it('FAILS a clean-console check when the error lands 800ms later, past the old 300ms hold', async () => {
+    const session = new LiveSession();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'console', level: 'error', absent: true },
+      5000,
+    );
+    setTimeout(() => session.push(ev(EventType.CONSOLE_ERROR, { message: 'boom' }, 800)), 800);
+    expect((await verdict).pass).toBe(false);
+  });
+
+  it('keeps holding while the page is still busy, and fails on an error after the busy spell', async () => {
+    // A clock that moves, so "quiet for N ms" means something.
+    const started = performance.now();
+    class Clocked extends LiveSession {
+      override elapsed(): number {
+        return performance.now() - started;
+      }
+    }
+    const session = new Clocked();
+    const verdict = waitForPredicate(
+      session,
+      { kind: 'console', level: 'error', absent: true },
+      5000,
+    );
+    const busy = setInterval(() => {
+      session.push(ev(EventType.DOM_ADDED, { tag: 'li' }, session.elapsed()));
+    }, 100);
+    setTimeout(() => {
+      clearInterval(busy);
+    }, 1200);
+    setTimeout(() => {
+      session.push(ev(EventType.CONSOLE_ERROR, { message: 'late' }, session.elapsed()));
+    }, 1400);
+    expect((await verdict).pass).toBe(false);
+  });
 });
 
 /**
