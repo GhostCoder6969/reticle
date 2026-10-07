@@ -28,7 +28,7 @@ import {
   writeFileSync,
   cpSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -116,6 +116,10 @@ async function oneRun(index) {
   const env = {
     ...process.env,
     HOME: home,
+    // The browsers Playwright downloaded live under the real home; a private one has none, and the
+    // daemon's lease pool cannot start a lane without them.
+    PLAYWRIGHT_BROWSERS_PATH:
+      process.env.PLAYWRIGHT_BROWSERS_PATH ?? join(homedir(), 'Library', 'Caches', 'ms-playwright'),
     RETICLE_PORT: String(daemonPort),
     RETICLE_TELEMETRY: '0',
     RETICLE_TOOL_LOG: join(dir, 'tools.jsonl'),

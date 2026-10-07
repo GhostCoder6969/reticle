@@ -35,3 +35,15 @@ node bench/harness-vs-agent/report.mjs
 
 - One run is an anecdote: agents vary run to run (the same arm has found 9 and 3). Compare medians of at least three runs.
 - The judge reads the final report only. A defect the drive saw and the report left out scores as missed, which is fair to the person reading the report and unfair to the evidence.
+
+## Results on the merchant fixture (2026-10-07)
+
+Ground truth: 23 defects (`reticle-fixtures/.../bench-harness/GROUND-TRUTH.md`). Each Harness row is three consecutive whole-app runs from an empty memory (no flows, lessons or plans), flows kept between runs 2 and 3. The calling agent is Sonnet in every arm.
+
+| Arm | Defects found per run | Distinct across the runs | Calling agent $ per run | Wall per run |
+| --- | --- | --- | --- | --- |
+| `agent-app` (two runs) | 9, 3 | B01 B02 B03 B05 B06 B12 B15 B19 B22 | 1.41, 0.99 | 200s, 162s |
+| `harness-app`, before the built-in checks | 2, 1, 2 | B01 B02 | ~0.05 | ~100s |
+| `harness-app`, with crawl, reconcile and the pagination check | 2, 4, 2 | B02 B07 B10 B11 B22 | ~0.15 | ~80s |
+
+What moved it: the crawl (B22, blank pages), comparing each page with the API (B07, B10, B11), and the new pagination contradiction (B12 in an earlier run). What did not: Harness decisions per run stayed at 120–190 on this app, because most journeys fail (the app is full of planted defects) and a failed journey is driven again, never replayed. Run-to-run variance is still large.

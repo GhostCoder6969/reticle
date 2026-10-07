@@ -240,3 +240,16 @@ describe('what the planner is told about the app', () => {
     );
   });
 });
+
+/** From the merchant drives: the planner saw the start page only and never planned a refund. */
+describe('what the planner is told the app holds beyond this page', () => {
+  it('carries the controls the last crawl found across the app', async () => {
+    const about = await aboutTheApp(
+      'PLAN: none',
+      () => Promise.resolve({ tree: '- link "Transactions" (ref=e1)' }),
+      ['- button "Refund"', '- switch "Auto-refund failed payments"'],
+    );
+    expect(about).toContain('CONTROLS A CRAWL FOUND ACROSS THE WHOLE APP');
+    expect(about).toContain('button "Refund"');
+  });
+});

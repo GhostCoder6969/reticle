@@ -226,14 +226,19 @@ const MAX_ABOUT_SNAPSHOT = 6_000;
 export async function aboutTheApp(
   planText: string,
   invoke: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  seenBefore: readonly string[] = [],
 ): Promise<string> {
+  const seen =
+    0 === seenBefore.length
+      ? ''
+      : `\n\nCONTROLS A CRAWL FOUND ACROSS THE WHOLE APP LAST TIME (not only this page):\n${seenBefore.join('\n')}`;
   try {
     const snap = await invoke(ReticleTool.SNAPSHOT, { mode: 'interactive' });
     const tree =
       'object' === typeof snap && null !== snap ? (snap as { tree?: unknown }).tree : undefined;
-    if ('string' !== typeof tree || 0 === tree.length) return planText;
-    return `${planText}\n\nTHE APP AS IT IS ON SCREEN NOW (its own controls, in its own words):\n${tree.slice(0, MAX_ABOUT_SNAPSHOT)}`;
+    if ('string' !== typeof tree || 0 === tree.length) return `${planText}${seen}`;
+    return `${planText}\n\nTHE APP AS IT IS ON SCREEN NOW (its own controls, in its own words):\n${tree.slice(0, MAX_ABOUT_SNAPSHOT)}${seen}`;
   } catch {
-    return planText;
+    return `${planText}${seen}`;
   }
 }

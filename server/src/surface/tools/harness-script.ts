@@ -109,8 +109,10 @@ export async function exploreScript(
   // No `about` for a named journey: the platform proposes personas only when it is given one.
   const about =
     focus === undefined
-      ? await aboutTheApp(planAsText(plan), (name, args) =>
-          reticleToolset(deps, pinned(options)).invoke(name, args),
+      ? await aboutTheApp(
+          planAsText(plan),
+          (name, args) => reticleToolset(deps, pinned(options)).invoke(name, args),
+          await controlsSeenBefore(deps, options.sessionId),
         )
       : '';
   const personas = focus === undefined ? personasIn(flows) : [];
@@ -219,11 +221,6 @@ export async function exploreScript(
     `Harness plan from the platform · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)` +
       (1 < ports.parallel ? `, ${String(ports.parallel)} at once` : ''),
   );
-  // The whole app, before any journey: a crawl clicks every reachable control (nothing destructive)
-  // and finds what no journey is aimed at — a nav link that renders nothing, a dead control, an
-  // error in the console. On the merchant dashboard eight blank pages went unreported without it.
-  const crawled =
-    focus === undefined ? await crawlApp(deps, options, harness, driverName) : undefined;
   let run: ScriptRun;
   try {
     run = await runScript(script, ports, (view) => {
@@ -236,10 +233,23 @@ export async function exploreScript(
   } finally {
     clearInterval(poll);
   }
+  // The whole app, after the journeys: a crawl clicks every reachable control (nothing destructive)
+  // and finds what no journey is aimed at — a nav link that renders nothing, a dead control, an
+  // error in the console. On the merchant dashboard eight blank pages went unreported without it.
+  // After, not before: run first, it left every leased lane of the drive unable to start.
+  const crawled =
+    focus === undefined && !run.stopped
+      ? await crawlApp(deps, options, harness, driverName)
+      : undefined;
   // How each journey went: kept beside the plan here, and told to the platform, whose next plan
   // drives what failed first.
   const results = journeyResults(run.view);
-  await savePlan(deps, options.sessionId, { planId, script, results }, planFile);
+  await savePlan(
+    deps,
+    options.sessionId,
+    { planId, script, results, ...appControlsOf(crawled) },
+    planFile,
+  );
   if (planId !== undefined) await reportPlanResults(platform, planId, results);
   for (const line of run.lines) narrate(line);
   narrate(
@@ -347,7 +357,12 @@ function safeProjectId(deps: ToolDeps, sessionId?: string): string | undefined {
 async function savePlan(
   deps: ToolDeps,
   sessionId: string | undefined,
-  plan: { planId?: string | undefined; script: DriveScript; results?: JourneyResult[] },
+  plan: {
+    planId?: string | undefined;
+    script: DriveScript;
+    results?: JourneyResult[];
+    appControls?: string[];
+  },
   file?: string,
 ): Promise<string | undefined> {
   try {
@@ -392,4 +407,42 @@ async function crawlApp(
   } catch {
     return undefined;
   }
+}
+
+/** The most controls kept from a crawl: a dashboard's navigation and its main buttons, not its rows. */
+const MAX_APP_CONTROLS = 80;
+
+/** The controls a crawl clicked across the app, kept with the plan so the next one can plan from them. */
+function appControlsOf(crawled: ToolOutcome | undefined): { appControls?: string[] } {
+  const visited = asRecord(crawled?.result)['visited'];
+  if (!Array.isArray(visited)) return {};
+  const names = [...new Set(visited.filter((v): v is string => 'string' === typeof v))];
+  return 0 === names.length ? {} : { appControls: names.slice(0, MAX_APP_CONTROLS) };
+}
+
+/**
+ * The controls the last crawl saw, from the newest saved plan that kept them. The planner reads the
+ * start page only; without these it never learned the refund buttons on another page existed, and
+ * no journey went near the app's costliest defects.
+ */
+async function controlsSeenBefore(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): Promise<string[]> {
+  try {
+    const dir = reticleDirPaths(sessionRoot(deps, sessionId)).plans;
+    const files = (await deps.fs.readdir(dir))
+      .filter((f) => f.endsWith('.json'))
+      .sort()
+      .reverse();
+    for (const file of files) {
+      const saved = asRecord(JSON.parse(await deps.fs.readFile(join(dir, file))));
+      const controls = saved['appControls'];
+      if (Array.isArray(controls))
+        return controls.filter((c): c is string => 'string' === typeof c);
+    }
+  } catch {
+    /* no plans yet: the planner works from the screen alone */
+  }
+  return [];
 }
