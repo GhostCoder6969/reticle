@@ -31,6 +31,7 @@ import { leasableAppUrl } from '@/language/flows/flow-tools.js';
 import type { ToolDeps } from './tool-kit.js';
 import { acquireLeasedSession } from './lease-tools.js';
 import { reticleToolset } from './harness-toolset.js';
+import { laneIds } from '@/features/harness/script/lane-ids.js';
 import {
   PlanStepKind,
   aboutTheApp,
@@ -164,6 +165,10 @@ export async function exploreScript(
   }, STOP_POLL_MS);
   poll.unref();
 
+  const lanes = laneIds(harness, leasing);
+  // Keyed by the tool list, which the script runner's recording wrapper passes through unchanged.
+  const harnessOf = new WeakMap<object, string>();
+
   const ports: ScriptPorts = {
     parallel: leasing ? Math.max(1, Math.min(script.lanes.length, pool.capacity(), MAX_LANES)) : 1,
     stopped: () => off,
@@ -173,11 +178,19 @@ export async function exploreScript(
       // A cold dev server can miss the first load while other lanes compile it; the second finds it warm.
       return acquire().catch(acquire);
     },
-    toolset: (sessionId, persona) =>
-      reticleToolset(deps, {
+    toolset: (sessionId, persona) => {
+      const id = lanes.idFor(sessionId);
+      const toolset = reticleToolset(deps, {
         ...(sessionId === undefined ? {} : { sessionId }),
-        drivenBy: { harness, driver: driverName, ...(persona === undefined ? {} : { persona }) },
-      }),
+        drivenBy: {
+          harness: id,
+          driver: driverName,
+          ...(persona === undefined ? {} : { persona }),
+        },
+      });
+      harnessOf.set(toolset.tools, id);
+      return toolset;
+    },
     drive: async (toolset, goal, steps) => {
       const persona =
         focus ??
@@ -191,7 +204,7 @@ export async function exploreScript(
       });
       // Before the lane's session ends and is graded, so its run cannot read "Proved" over a goal
       // the drive did not reach.
-      noteHarnessGoal(harness, result.goalMet);
+      noteHarnessGoal(harnessOf.get(toolset.tools) ?? harness, result.goalMet);
       await bankOpenRecording(toolset, result, persona);
       if (persona !== undefined) {
         const saved = reconcileFlows(ahead, await reads.flows.list(), result.toolCalls);
@@ -259,7 +272,10 @@ export async function exploreScript(
     ...goalOfRun(run.drives),
   };
   const reconciled = reconcileFlows(before, await reads.flows.list(), run.toolCalls);
-  const runId = harnessRunId(harness);
+  const runIds = lanes.all().flatMap((id) => {
+    const runId = harnessRunId(id);
+    return runId === undefined ? [] : [runId];
+  });
   const unverifiedFlows = await flowsThatCheckNothing(reads, [
     ...reconciled.savedFlows,
     ...reconciled.rewroteFlows,
@@ -276,7 +292,7 @@ export async function exploreScript(
       (name, args) => ports.toolset(pinned(options).sessionId, focus).invoke(name, args),
       options.goals ?? goalsIn(focus),
     ),
-    ...(runId === undefined ? {} : { runIds: [runId] }),
+    ...(0 === runIds.length ? {} : { runIds }),
     planLines: [
       `Plan · ${String(script.journeys.length)} journeys in ${String(script.lanes.length)} lane(s)`,
       ...run.lines,
