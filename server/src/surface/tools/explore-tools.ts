@@ -69,6 +69,8 @@ export const EXPLORE_TOOLS: ToolDef[] = [
        * Absent when no journey's goal was judged. Checks that held are not the goal reached.
        */
       goalMet: z.boolean().optional(),
+      /** The runs this drive syncs as (`harness-<uuid>`): what the platform links its check to. */
+      runIds: z.array(z.string()).optional(),
       /** One verdict per requested goal, checked by the harness itself. Only `yes` is proved. */
       goals: z.array(z.object({ text: z.string(), verified: z.string() })),
       /**
@@ -113,6 +115,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         plan,
         goals,
         planLines,
+        runIds,
       } = await exploreApp(deps, env, {
         ...('string' === typeof persona ? { focus: persona } : {}),
         ...('number' === typeof maxSteps ? { maxSteps } : {}),
@@ -127,6 +130,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         unverifiedFlows: [...unverifiedFlows],
         proved: drive.proved,
         ...(drive.goalMet === undefined ? {} : { goalMet: drive.goalMet }),
+        ...(runIds === undefined ? {} : { runIds: [...runIds] }),
         goals: [...goals],
         plan: { summary: plan.summary, steps: [...plan.steps] },
         // Derived, not narrated. The driver's own `summary` is appended only when it said
@@ -234,9 +238,13 @@ export async function driveForChat(
       })
     : [];
   const goalMet = out['goalMet'];
+  const runIds = Array.isArray(out['runIds'])
+    ? out['runIds'].filter((id): id is string => 'string' === typeof id)
+    : [];
   return {
     // Only a drive that ran a check and did not break counts as one that proved anything.
     ok: true === out['proved'] && error === undefined,
+    ...(0 === runIds.length ? {} : { runIds }),
     verdict: driveVerdict({
       proved: true === out['proved'],
       goals,

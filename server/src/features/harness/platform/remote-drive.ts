@@ -39,6 +39,8 @@ export interface RemoteDriveOutcome {
   verdict?: DriveVerdict;
   /** The address the drive was on, for the check the platform keeps. */
   url?: string;
+  /** The runs this drive syncs as, so the platform shows the drive once. */
+  runIds?: readonly string[];
 }
 
 export type DriveVerdict = 'yes' | 'no' | 'unknown';
@@ -243,8 +245,11 @@ export function driveVerdict(out: {
   error?: string;
   goals?: readonly { verified: string }[];
 }): DriveVerdict {
-  if (out.error !== undefined || !out.proved) return 'unknown';
-  if (out.goalMet !== undefined) return out.goalMet ? 'yes' : 'no';
+  if (out.error !== undefined) return 'unknown';
+  // A goal judged unmet is a failed drive, whatever else held; met counts only with a proof behind it.
+  if (false === out.goalMet) return 'no';
+  if (!out.proved) return 'unknown';
+  if (true === out.goalMet) return 'yes';
   const goals = out.goals ?? [];
   if (goals.some((g) => 'no' === g.verified)) return 'no';
   if (0 < goals.length && goals.every((g) => 'yes' === g.verified)) return 'yes';

@@ -227,6 +227,8 @@ describe('which tab a chat-requested drive uses', () => {
 describe('the verdict a chat-requested drive reports', () => {
   it('is the goal judgement when the drive carries one', () => {
     expect(driveVerdict({ goalMet: false, proved: true })).toBe('no');
+    // A journey whose goal was not reached is not "passed", so nothing reads proved: still a no.
+    expect(driveVerdict({ goalMet: false, proved: false })).toBe('no');
     expect(driveVerdict({ goalMet: true, proved: true })).toBe('yes');
   });
 
