@@ -243,7 +243,8 @@ function loopBody(text: string, headOpen: number): string | null {
 // 18: merging duplicate drives, which has to seed the copies it merges.
 // 19: the HUD notices cache, whose last-good copy is rewritten once per failure mode.
 // 20: feedback that cannot be sent, saved to a temp project instead of the checkout it ran in.
-const EXPECTED_IO_LOOP_FILES = 20;
+// 21: a source edit on a real Vite dev server, polled until the plain URL serves it.
+const EXPECTED_IO_LOOP_FILES = 21;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];
