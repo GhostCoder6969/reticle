@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { ReticleCommand, ReticleTool, ScriptStatus } from '@reticlehq/core';
+import { ReticleCommand, ReticleTool, ScriptStatus, asRecord } from '@reticlehq/core';
 import { PromptContextSchema, checkScript, type DriveScript } from '@reticlehq/core/artifacts';
 import {
   runScript,
@@ -370,6 +370,7 @@ function goalOfRun(drives: readonly HarnessResult[]): { goalMet?: boolean } {
 
 /** Controls the opening crawl clicks: enough for a dashboard's navigation and its main buttons. */
 const CRAWL_STEPS = 30;
+const CRAWL_ACTION = 'crawl';
 
 /** The opening crawl, as one recorded call. Undefined when it could not run; the plan runs anyway. */
 async function crawlApp(
@@ -378,12 +379,15 @@ async function crawlApp(
   harness: string,
   driver: string,
 ): Promise<ToolOutcome | undefined> {
-  const args = { maxSteps: CRAWL_STEPS };
+  // The crawl is an action of `reticle_verify` now; by its old name it answered "unknown tool",
+  // which read as a crawl that found nothing.
+  const args = { action: CRAWL_ACTION, maxSteps: CRAWL_STEPS };
   try {
     const result = await reticleToolset(deps, {
       ...pinned(options),
       drivenBy: { harness, driver },
-    }).invoke(ReticleTool.CRAWL, args);
+    }).invoke(ReticleTool.VERIFY, args);
+    if (undefined !== asRecord(result)['error']) return undefined;
     return { id: 'crawl', name: ReticleTool.CRAWL, args, result, isError: false };
   } catch {
     return undefined;

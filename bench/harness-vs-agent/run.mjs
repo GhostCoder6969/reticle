@@ -52,6 +52,11 @@ const need = (key) => {
   return value;
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Every child this script started, stopped however the script ends, a crash included. */
+const alive = new Set();
+process.on('exit', () => {
+  for (const child of alive) child.kill();
+});
 
 const arm = arg('arm', '');
 if (!ARMS.includes(arm)) throw new Error(`--arm must be one of ${ARMS.join(', ')}`);
@@ -128,6 +133,8 @@ async function oneRun(index) {
     child.stderr.on('data', (d) => out.push(d));
     child.on('exit', () => writeFileSync(join(dir, log), Buffer.concat(out)));
     children.push(child);
+    alive.add(child);
+    child.on('exit', () => alive.delete(child));
     return child;
   };
   // The daemon first: it writes the pairing token the app's build plugin reads when it starts.
@@ -150,9 +157,11 @@ async function oneRun(index) {
   );
 
   // A real browser tab, kept open for the agent to drive.
-  const { chromium } = await import(
+  const playwright = await import(
     pathToFileURL(createRequire(join(REPO, 'server/package.json')).resolve('playwright')).href
   );
+  // CommonJS underneath, so the module's exports sit on `default` when imported.
+  const { chromium } = playwright.chromium === undefined ? playwright.default : playwright;
   const browser = await chromium.launch({
     args: ['--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
   });
