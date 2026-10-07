@@ -237,7 +237,8 @@ export async function exploreScript(
   // The whole app, after the journeys: a crawl clicks every reachable control (nothing destructive)
   // and finds what no journey is aimed at — a nav link that renders nothing, a dead control, an
   // error in the console. On the merchant dashboard eight blank pages went unreported without it.
-  // After, not before: run first, it left every leased lane of the drive unable to start.
+  // After the journeys, so the lanes start sooner. (Run first, it once left every lane unable to
+  // start; that did not reproduce on a clean install, and was the checkout's, not the order's.)
   const crawled =
     focus === undefined && !run.stopped
       ? await crawlApp(deps, options, harness, driverName)
