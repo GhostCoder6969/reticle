@@ -249,7 +249,7 @@ describe('what the planner is told the app holds beyond this page', () => {
       () => Promise.resolve({ tree: '- link "Transactions" (ref=e1)' }),
       ['- button "Refund"', '- switch "Auto-refund failed payments"'],
     );
-    expect(about).toContain('CONTROLS A CRAWL FOUND ACROSS THE WHOLE APP');
+    expect(about).toContain('CONTROLS SEEN ACROSS THE WHOLE APP');
     expect(about).toContain('button "Refund"');
   });
 });

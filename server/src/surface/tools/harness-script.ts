@@ -33,6 +33,7 @@ import type { ToolDeps } from './tool-kit.js';
 import { acquireLeasedSession } from './lease-tools.js';
 import { reticleToolset } from './harness-toolset.js';
 import { laneIds } from '@/features/harness/script/lane-ids.js';
+import { appControlsOf } from '@/features/harness/script/app-controls.js';
 import {
   PlanStepKind,
   aboutTheApp,
@@ -247,7 +248,7 @@ export async function exploreScript(
   await savePlan(
     deps,
     options.sessionId,
-    { planId, script, results, ...appControlsOf(crawled) },
+    { planId, script, results, ...appControlsOf(run.toolCalls, crawled) },
     planFile,
   );
   if (planId !== undefined) await reportPlanResults(platform, planId, results);
@@ -407,17 +408,6 @@ async function crawlApp(
   } catch {
     return undefined;
   }
-}
-
-/** The most controls kept from a crawl: a dashboard's navigation and its main buttons, not its rows. */
-const MAX_APP_CONTROLS = 80;
-
-/** The controls a crawl clicked across the app, kept with the plan so the next one can plan from them. */
-function appControlsOf(crawled: ToolOutcome | undefined): { appControls?: string[] } {
-  const visited = asRecord(crawled?.result)['visited'];
-  if (!Array.isArray(visited)) return {};
-  const names = [...new Set(visited.filter((v): v is string => 'string' === typeof v))];
-  return 0 === names.length ? {} : { appControls: names.slice(0, MAX_APP_CONTROLS) };
 }
 
 /**

@@ -231,7 +231,7 @@ export async function aboutTheApp(
   const seen =
     0 === seenBefore.length
       ? ''
-      : `\n\nCONTROLS A CRAWL FOUND ACROSS THE WHOLE APP LAST TIME (not only this page):\n${seenBefore.join('\n')}`;
+      : `\n\nCONTROLS SEEN ACROSS THE WHOLE APP LAST TIME, BY PAGE (not only this page):\n${seenBefore.join('\n')}`;
   try {
     const snap = await invoke(ReticleTool.SNAPSHOT, { mode: 'interactive' });
     const tree =

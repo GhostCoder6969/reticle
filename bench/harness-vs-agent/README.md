@@ -59,3 +59,15 @@ Three consecutive whole-app runs, empty memory, no ground truth (credit use is t
 | 3   |                      64 |                          28 |              4 |
 
 Decisions did not fall. Every persona journey on this app ends at sign-in with a check like "an error is shown", and the engine can claim a request, a signal or a page change but cannot check text on screen, so those goals are judged unmet, nothing is remembered as a route, and the journeys are driven again. Saved flows did persist and replay once the daemon ran in the app's folder.
+
+### After goal judging on the final page (2026-10-07)
+
+Same three-run shape. A journey's goal is judged on what was done and the page it ended on, a field's value follows the journey (wrong, empty or kept), and refusals count as defects only where the journey wanted the write through.
+
+| Run | Harness decisions (Jev) | Fill values written (model) | Journey goals met |
+| --- | ----------------------: | --------------------------: | ----------------: |
+| 1   |                      24 |                          19 |            8 of 9 |
+| 2   |                       8 |                           8 |            4 of 4 |
+| 3   |                      15 |                          14 |            6 of 7 |
+
+On the merchant fixture, the plan's app map now carries the controls of every page a drive looked at. Run 1 (no map yet) found B22; runs 2 and 3 planned a refund journey from the map and both found B01 and B02.
