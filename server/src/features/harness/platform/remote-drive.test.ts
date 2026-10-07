@@ -229,14 +229,41 @@ describe('the verdict a chat-requested drive reports', () => {
     expect(driveVerdict({ goalMet: false, proved: true })).toBe('no');
     // A journey whose goal was not reached is not "passed", so nothing reads proved: still a no.
     expect(driveVerdict({ goalMet: false, proved: false })).toBe('no');
-    expect(driveVerdict({ goalMet: true, proved: true })).toBe('yes');
+    expect(
+      driveVerdict({ goalMet: true, proved: true, checks: { held: 1, failed: 0, undecided: 0 } }),
+    ).toBe('yes');
   });
 
   it('falls back to the goals the harness checked itself', () => {
     expect(driveVerdict({ proved: true, goals: [{ verified: 'yes' }, { verified: 'no' }] })).toBe(
       'no',
     );
-    expect(driveVerdict({ proved: true, goals: [{ verified: 'yes' }] })).toBe('yes');
+    expect(
+      driveVerdict({
+        proved: true,
+        goals: [{ verified: 'yes' }],
+        checks: { held: 1, failed: 0, undecided: 0 },
+      }),
+    ).toBe('yes');
+  });
+
+  it('is never yes over a check that failed, whatever the model said of the goal', () => {
+    // A check that ran and came back "no" is evidence against, not proof: "proved" only says one ran.
+    expect(
+      driveVerdict({ goalMet: true, proved: true, checks: { held: 0, failed: 1, undecided: 0 } }),
+    ).toBe('no');
+    expect(
+      driveVerdict({ goalMet: true, proved: true, checks: { held: 2, failed: 1, undecided: 0 } }),
+    ).toBe('no');
+  });
+
+  it('is yes only with a check that held behind the goal', () => {
+    expect(
+      driveVerdict({ goalMet: true, proved: true, checks: { held: 1, failed: 0, undecided: 2 } }),
+    ).toBe('yes');
+    expect(
+      driveVerdict({ goalMet: true, proved: true, checks: { held: 0, failed: 0, undecided: 3 } }),
+    ).toBe('unknown');
   });
 
   it('is unknown when the drive broke or nothing settled the goal, never a pass by default', () => {

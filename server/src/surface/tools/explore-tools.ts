@@ -25,7 +25,7 @@ import {
   MSG_NO_HARNESS_KEY,
 } from './harness-explore.js';
 import { EXPLORE_NEEDS } from '@/features/harness/drivers.js';
-import { describeDrive, replayedFlows } from '@/features/harness/drive-report.js';
+import { checkTally, describeDrive, replayedFlows } from '@/features/harness/drive-report.js';
 import { StopReason, type HarnessResult } from '@/features/harness/harness.js';
 
 export const EXPLORE_TOOLS: ToolDef[] = [
@@ -69,6 +69,8 @@ export const EXPLORE_TOOLS: ToolDef[] = [
        * Absent when no journey's goal was judged. Checks that held are not the goal reached.
        */
       goalMet: z.boolean().optional(),
+      /** How the drive's checks came out, one per control and claim at its worst. */
+      checks: z.object({ held: z.number(), failed: z.number(), undecided: z.number() }),
       /** The runs this drive syncs as (`harness-<uuid>`): what the platform links its check to. */
       runIds: z.array(z.string()).optional(),
       /** One verdict per requested goal, checked by the harness itself. Only `yes` is proved. */
@@ -129,6 +131,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
         rewroteFlows: [...rewroteFlows],
         unverifiedFlows: [...unverifiedFlows],
         proved: drive.proved,
+        checks: checkTally(drive.toolCalls),
         ...(drive.goalMet === undefined ? {} : { goalMet: drive.goalMet }),
         ...(runIds === undefined ? {} : { runIds: [...runIds] }),
         goals: [...goals],
@@ -238,6 +241,9 @@ export async function driveForChat(
       })
     : [];
   const goalMet = out['goalMet'];
+  const tally = asRecord(out['checks']);
+  const count = (key: string): number => ('number' === typeof tally[key] ? tally[key] : 0);
+  const checks = { held: count('held'), failed: count('failed'), undecided: count('undecided') };
   const runIds = Array.isArray(out['runIds'])
     ? out['runIds'].filter((id): id is string => 'string' === typeof id)
     : [];
@@ -247,6 +253,7 @@ export async function driveForChat(
     ...(0 === runIds.length ? {} : { runIds }),
     verdict: driveVerdict({
       proved: true === out['proved'],
+      checks,
       goals,
       ...(error === undefined ? {} : { error }),
       ...('boolean' === typeof goalMet ? { goalMet } : {}),

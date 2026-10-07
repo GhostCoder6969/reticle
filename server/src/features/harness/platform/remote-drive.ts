@@ -244,14 +244,18 @@ export function driveVerdict(out: {
   proved: boolean;
   error?: string;
   goals?: readonly { verified: string }[];
+  /** How the drive's checks came out. `proved` only says one RAN; this says what each answered. */
+  checks?: { held: number; failed: number; undecided: number };
 }): DriveVerdict {
   if (out.error !== undefined) return 'unknown';
-  // A goal judged unmet is a failed drive, whatever else held; met counts only with a proof behind it.
+  // A goal judged unmet, or a check that came back "no", is a failed drive whatever else held.
   if (false === out.goalMet) return 'no';
-  if (!out.proved) return 'unknown';
-  if (true === out.goalMet) return 'yes';
+  if (0 < (out.checks?.failed ?? 0)) return 'no';
   const goals = out.goals ?? [];
   if (goals.some((g) => 'no' === g.verified)) return 'no';
+  // A yes needs a check that held behind it: the model saying the goal was met is not evidence.
+  if (!out.proved || 0 === (out.checks?.held ?? 0)) return 'unknown';
+  if (true === out.goalMet) return 'yes';
   if (0 < goals.length && goals.every((g) => 'yes' === g.verified)) return 'yes';
   return 'unknown';
 }
