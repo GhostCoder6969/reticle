@@ -202,9 +202,21 @@ async function capture(
   sessionId: string | undefined,
   args: Record<string, unknown>,
 ): Promise<{ png?: Uint8Array; reason?: string; runtime?: string | undefined }> {
-  const provider = screenshotProvider(deps);
-  if (provider !== undefined) {
-    const session = deps.sessions.resolve(sessionId);
+  /*
+   * Only a provider driving THIS session's page. A launched provider photographs the one page it
+   * owns whatever url it is handed, so asking it about another session saved the driven tab's pixels
+   * under that session's name and answered `saved: true` (#1407). Real input asks the same question
+   * before every gesture.
+   */
+  const candidate = screenshotProvider(deps);
+  const session = candidate === undefined ? undefined : deps.sessions.resolve(sessionId);
+  const provider =
+    candidate !== undefined &&
+    session !== undefined &&
+    (await candidate.isAvailableFor(session.url))
+      ? candidate
+      : undefined;
+  if (provider !== undefined && session !== undefined) {
     const png = await provider.screenshot(session.url, await buildOpts(deps, sessionId, args));
     // A driven browser renders the session's URL in a BROWSER — so the pixels are web even when the
     // session named is a desktop window. Scoping those under the desktop runtime would corrupt that
